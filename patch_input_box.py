@@ -1,4 +1,8 @@
 import numpy as np
+from datetime import datetime
+import os
+
+input_box_configs_dir = "input_box_configs"
 
 def stringify_box(box_config):
     """
@@ -40,7 +44,32 @@ def create_patch_input_box(image, i, j, c):
     mask = np.zeros((h, w), dtype=bool)
     mask[i:i+c, j:j+c] = True
 
-    # Replace those positions with [0, 1]
-    box_config[mask] = [0, 1]
+    # Replace those positions with [0, 255]
+    box_config[mask] = [0, 255]
 
     return box_config
+
+def create_patch_input_config_file(image, i, j, c):
+    """
+    Creates a patch input config file.
+
+    Args:
+        image: The image.
+        i (int): The row index of the patch.
+        j (int): The column index of the patch.
+        c: patch size.
+    Returns:
+        None
+    """
+    box_config = create_patch_input_box(image, i, j, c)
+    text = stringify_box(box_config)
+
+    filename = os.path.join(input_box_configs_dir, f"patch_box_{i}_{j}_{c}_" +
+                            datetime.now().strftime("%Y%m%d-%H%M%S") + ".txt")
+
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+
+    with open(filename, 'w') as f:
+        f.write(text)
+    
+    return filename
