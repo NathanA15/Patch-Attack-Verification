@@ -35,6 +35,18 @@ def create_patch_input_box(image, i, j, c):
     Returns:
         
     """
+    if c == 0:
+        h, w = image.shape[:2]
+        # put zeros everywhere 
+        # Start by copying each pixel twice: shape (h, w, 2)
+        box_config = np.stack([image, image], axis=2).astype(float)
+
+        # Replace those positions with [0, 255]
+        box_config[:, :] = [0, 0]
+
+        return box_config
+        
+
     h, w = image.shape[:2]
 
     # Start by copying each pixel twice: shape (h, w, 2)
@@ -44,8 +56,8 @@ def create_patch_input_box(image, i, j, c):
     mask = np.zeros((h, w), dtype=bool)
     mask[i:i+c, j:j+c] = True
 
-    # Replace those positions with [0, 255]
-    box_config[mask] = [0, 255]
+    # Replace those positions with [0, 1]
+    box_config[mask] = [0, 1]
 
     return box_config
 
