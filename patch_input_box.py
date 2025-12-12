@@ -46,6 +46,7 @@ def create_patch_input_box(image, i, j, c):
 
         return box_config
         
+    image = np.asarray(image, dtype=np.float32) / 255.0  # now guaranteed in [0, 1]
 
     h, w = image.shape[:2]
 
@@ -61,7 +62,7 @@ def create_patch_input_box(image, i, j, c):
 
     return box_config
 
-def create_patch_input_config_file(image, i, j, c):
+def create_patch_input_config_file(image, i, j, c, label):
     """
     Creates a patch input config file.
 
@@ -76,12 +77,15 @@ def create_patch_input_config_file(image, i, j, c):
     box_config = create_patch_input_box(image, i, j, c)
     text = stringify_box(box_config)
 
-    filename = os.path.join(input_box_configs_dir, f"patch_box_{i}_{j}_{c}_" +
-                            datetime.now().strftime("%Y%m%d-%H%M%S") + ".txt")
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    filename = os.path.join(
+        input_box_configs_dir,
+        f"{timestamp}_label{label}_patch_box_{i}_{j}_{c}.txt"
+    )
 
     os.makedirs(os.path.dirname(filename), exist_ok=True)
 
     with open(filename, 'w') as f:
         f.write(text)
     
-    return filename
+    return os.path.abspath(filename)
