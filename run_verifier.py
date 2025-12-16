@@ -18,14 +18,16 @@ LOG_DIR = Path("/root/Projects/logs")
 # CORE FUNCTION
 # =========================
 
-def run_eran(input_box_path: str, domain: str) -> int:
+def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_complete: int = 60) -> int:
 	""" 
 	Run eran and extract dominant class or -1 if hasn't succeeded
 	Dominant class is the class given to all permutated images in the range.
 	
 	Args:
 		input_box_path (str): path to input_box with values between [0,1] for each pixels
-		domain (str): "deeppoly or others"
+		domain (str): 'deepzono', 'refinezono', 'deeppoly', or 'refinepoly'
+		complete (bool): if True, activate MILP Verifier if it failed proving robustness with current domain
+		timeout_complete (int): timeout for MILP Verifer
 
 	Raises:
 		ValueError: ...
@@ -45,7 +47,9 @@ def run_eran(input_box_path: str, domain: str) -> int:
 		"--netname", NETNAME,
 		"--domain", domain,
 		"--input_box", input_box_path,
-		"--logdir", str(LOG_DIR)
+		"--logdir", str(LOG_DIR),
+		"--complete", str(complete),
+		"--timeout_complete", str(timeout_complete),
 	]
 
 	with open(log_file, "w") as f:
