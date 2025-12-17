@@ -18,7 +18,7 @@ LOG_DIR = Path("/root/Projects/logs")
 # CORE FUNCTION
 # =========================
 
-def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_complete: int = 60) -> int:
+def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_complete: int = 60, use_milp: bool = False) -> int:
 	""" 
 	Run eran and extract dominant class or -1 if hasn't succeeded
 	Dominant class is the class given to all permutated images in the range.
@@ -50,6 +50,8 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 		"--logdir", str(LOG_DIR),
 		"--complete", str(complete),
 		"--timeout_complete", str(timeout_complete),
+		"--use_milp", str(use_milp),
+		"--timeout_milp", str(10),
 	]
 
 	with open(log_file, "w") as f:
