@@ -6,6 +6,8 @@ import argparse
 import ast
 import onnxruntime as ort
 import numpy as np
+import matplotlib.pyplot as plt
+from patch_input_box import *
 
 # =========================
 # GLOBAL PARAMETERS
@@ -75,25 +77,47 @@ def parse_adversarial_examples(text):
 	match = re.search(pattern, text, re.DOTALL)
 
 	if not match:
-		return []
+		return None
 
 	try:
 		return ast.literal_eval(match.group(1))
 	except (ValueError, SyntaxError):
-		return []
-	
-def parse_milp_status(text):
-	match = re.search(r"MILP status is\s+(\d+)", text)
-	if not match:
 		return None
-	return int(match.group(1))
+	
+# def parse_milp_status(text):
+# 	match = re.search(r"MILP status is\s+(\d+)", text)
+# 	if not match:
+# 		return None
+# 	return int(match.group(1))
+
+def parse_milp_statuses(text):
+	return [int(x) for x in re.findall(r"MILP status is\s+(\d+)", text)]
 
 def format_milp_status(status_code):
 	if status_code is None:
 		return "UNKNOWN"
 	return MILP_STATUS_NAME.get(status_code, f"UNKNOWN_{status_code}")
 
-def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_complete: int = 60, use_milp: bool = False, label: int = -1, timeout_final_milp: int = 30) -> int:
+
+def plot_adv(example):
+    adv_img = np.array(example).reshape(28, 28)
+    plt.figure(figsize=(4, 4))
+    plt.imshow(adv_img, cmap="gray")
+    plt.axis("off")
+    
+
+def verify_adv_example(example, label_img, failed_labels):
+	# Verify adversarial example using ONNX model
+
+	ex = np.array(example, dtype=np.float32).reshape(1, 1, 28, 28) # dimension 1x1x28x28
+	predicted_class = np.argmax(run_onnx(NETNAME, ex)[0])
+	print("Predicted class for adversarial example:", predicted_class)
+	print("Failed labels during verification using network:", failed_labels)
+	print("Original label:", label_img)
+
+
+
+def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_complete: int = 60, use_milp: bool = False, label: int = -1, timeout_final_milp: int = 30, adv_label: int = -1) -> int:
 	""" 
 	Run eran and extract dominant class or -1 if hasn't succeeded
 	Dominant class is the class given to all permutated images in the range.
@@ -127,9 +151,10 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 		"--use_milp", str(use_milp),
 		"--timeout_milp", str(180),
 		"--timeout_final_milp", str(timeout_final_milp), # this is the right one to set
-		"--label", str(label)
+		"--label", str(label),
+		"--adv_label", str(adv_label),
 	]
-
+	start_time = datetime.now()
 	with open(log_file, "w") as f:
 		subprocess.run(
 			cmd,
@@ -139,6 +164,10 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 			text=True,
 			check=True
 		)
+	
+	end_time = datetime.now()
+	elapsed_time = end_time - start_time
+	print(f"ERAN run completed in {elapsed_time}")
 
 	log_text = log_file.read_text()
 
@@ -152,13 +181,45 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 
 	failed_labels = parse_failed_labels(log_text)
 
-	status = parse_milp_status(log_text)
+	statuses = parse_milp_statuses(log_text)
 
-	print("MILP status =", status, f"({format_milp_status(status)})")
-	# print("hold =", hold)
-	# print("log file =", log_file)
+	print("Last MILP status =", statuses[-1] if statuses else None, f"({format_milp_status(statuses[-1]) if statuses else 'UNKNOWN'})")
 
-	return hold, example, failed_labels
+
+
+	return hold, example, failed_labels, elapsed_time
+
+def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30):
+	"""
+	This function verifies a specific image from the dataset using ERAN with patch attack verification.
+	And plots the adversarial example if found.
+	Including prints of relevant information.
+
+	Args:
+		img_index (int): index of image to verify
+		pixels (np.ndarray): array of pixel values
+		labels (np.ndarray): array of labels
+		timeout_milp (int, optional): timeout for MILP verification. Defaults to 30.
+	"""
+
+	img = pixels[img_index].reshape(28, 28)
+	label_img = labels[img_index]
+
+	# patch size 11 finds adversarial example for index 7
+	input_box_path = create_patch_input_config_file(img, x_box, y_box, size_box, label=label_img)
+	dominant_class, example, failed_labels, elapsed_time = run_eran(input_box_path=input_box_path, label=label_img, domain="refinepoly", complete=True, timeout_final_milp=timeout_milp, use_milp=True) #, adv_labels=[2]
+
+	print("dominant_class: ", dominant_class)
+	if example is None or len(example) == 0:
+		print("No adversarial example returned")
+	else:
+		plot_adv(example)
+
+		verify_adv_example(example, label_img, failed_labels)
+
+	return elapsed_time
+
+
 
 # =========================
 # MAIN ENTRY POINT
