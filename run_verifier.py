@@ -107,13 +107,24 @@ def plot_adv(example):
     
 
 def verify_adv_example(example, label_img, failed_labels):
-	# Verify adversarial example using ONNX model
+	"""Verify adversarial example using ONNX model
+
+	Args:
+		example (list or np.ndarray): The adversarial example to verify.
+		label_img (int): The original label of the image.
+		failed_labels (list): List of labels that failed during verification.
+
+	Returns:
+		bool: True if its a real adversarial example, False otherwise
+	"""
 
 	ex = np.array(example, dtype=np.float32).reshape(1, 1, 28, 28) # dimension 1x1x28x28
 	predicted_class = np.argmax(run_onnx(NETNAME, ex)[0])
 	print("Predicted class for adversarial example:", predicted_class)
 	print("Failed labels during verification using network:", failed_labels)
 	print("Original label:", label_img)
+
+	return label_img != predicted_class
 
 
 
@@ -137,7 +148,9 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 	LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 	timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-	log_file = LOG_DIR / f"{timestamp}_eran_run.log"
+	daily_folder = LOG_DIR / datetime.now().strftime("%Y%m%d")
+	daily_folder.mkdir(parents=True, exist_ok=True)
+	log_file = daily_folder / f"{timestamp}_eran_run.log"
 
 	cmd = [
 		PYTHON_BIN, ".",
@@ -183,13 +196,14 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 
 	statuses = parse_milp_statuses(log_text)
 
-	print("Last MILP status =", statuses[-1] if statuses else None, f"({format_milp_status(statuses[-1]) if statuses else 'UNKNOWN'})")
+	last_status = statuses[-1] if statuses else None # last one because break_on_failure is true
+
+	print("Last MILP status =", last_status, f"({format_milp_status(last_status) if last_status is not None else 'UNKNOWN'})")
+
+	return failed_labels, elapsed_time, last_status, example
 
 
-
-	return hold, example, failed_labels, elapsed_time
-
-def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30):
+def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, with_plots=False):
 	"""
 	This function verifies a specific image from the dataset using ERAN with patch attack verification.
 	And plots the adversarial example if found.
@@ -207,17 +221,19 @@ def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp
 
 	# patch size 11 finds adversarial example for index 7
 	input_box_path = create_patch_input_config_file(img, x_box, y_box, size_box, label=label_img)
-	dominant_class, example, failed_labels, elapsed_time = run_eran(input_box_path=input_box_path, label=label_img, domain="refinepoly", complete=True, timeout_final_milp=timeout_milp, use_milp=True) #, adv_labels=[2]
+	failed_labels, elapsed_time, last_status, example = run_eran(input_box_path=input_box_path, label=label_img, domain="refinepoly", complete=True, timeout_final_milp=timeout_milp, use_milp=True) #, adv_labels=[2]
+	
+	is_adversarial = False
 
-	print("dominant_class: ", dominant_class)
 	if example is None or len(example) == 0:
 		print("No adversarial example returned")
 	else:
-		plot_adv(example)
+		if with_plots:
+			plot_adv(example)
 
-		verify_adv_example(example, label_img, failed_labels)
+		is_adversarial = verify_adv_example(example, label_img, failed_labels)
 
-	return elapsed_time
+	return elapsed_time, last_status, failed_labels, example, is_adversarial 
 
 
 

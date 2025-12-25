@@ -1,0 +1,401 @@
+/root/ERAN/gurobi912/linux64/gurobi.lic
+Starting batch verification: 10 images with patch sizes [3, 5, 6, 7, 8, 9, 10, 11, 12]
+Results will be saved to: /root/Projects/Nathan/Patch-Attack-Verification/patch_attack_verification_log.csv
+--------------------------------------------------------------------------------
+
+Processing Patch Size: 3
+  Testing image 0 (Label: 7)... ERAN run completed in 0:00:03.497570
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.50s)
+  Testing image 1 (Label: 2)... ERAN run completed in 0:00:02.986024
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 2.99s)
+  Testing image 2 (Label: 1)... ERAN run completed in 0:00:02.970639
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 2.97s)
+  Testing image 3 (Label: 0)... ERAN run completed in 0:00:02.970534
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 2.97s)
+  Testing image 4 (Label: 4)... ERAN run completed in 0:00:02.962782
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 2.96s)
+  Testing image 5 (Label: 1)... ERAN run completed in 0:00:03.114079
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.11s)
+  Testing image 6 (Label: 4)... ERAN run completed in 0:00:03.003237
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.00s)
+  Testing image 7 (Label: 9)... ERAN run completed in 0:00:02.993263
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 2.99s)
+  Testing image 8 (Label: 5)... ERAN run completed in 0:00:03.008838
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.01s)
+  Testing image 9 (Label: 9)... ERAN run completed in 0:00:02.963218
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 2.96s)
+
+Processing Patch Size: 5
+  Testing image 0 (Label: 7)... ERAN run completed in 0:00:03.119739
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.12s)
+  Testing image 1 (Label: 2)... ERAN run completed in 0:00:03.084139
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.08s)
+  Testing image 2 (Label: 1)... ERAN run completed in 0:00:03.214033
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.21s)
+  Testing image 3 (Label: 0)... ERAN run completed in 0:00:03.170755
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.17s)
+  Testing image 4 (Label: 4)... ERAN run completed in 0:00:03.115550
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.12s)
+  Testing image 5 (Label: 1)... ERAN run completed in 0:00:03.167363
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.17s)
+  Testing image 6 (Label: 4)... ERAN run completed in 0:00:03.109496
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.11s)
+  Testing image 7 (Label: 9)... ERAN run completed in 0:00:03.135684
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.14s)
+  Testing image 8 (Label: 5)... ERAN run completed in 0:00:03.165195
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.17s)
+  Testing image 9 (Label: 9)... ERAN run completed in 0:00:03.183118
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.18s)
+
+Processing Patch Size: 6
+  Testing image 0 (Label: 7)... ERAN run completed in 0:00:03.450218
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.45s)
+  Testing image 1 (Label: 2)... ERAN run completed in 0:00:03.435412
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.44s)
+  Testing image 2 (Label: 1)... ERAN run completed in 0:00:04.105770
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 4.11s)
+  Testing image 3 (Label: 0)... ERAN run completed in 0:00:03.384835
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.38s)
+  Testing image 4 (Label: 4)... ERAN run completed in 0:00:03.471391
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.47s)
+  Testing image 5 (Label: 1)... ERAN run completed in 0:00:03.832358
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.83s)
+  Testing image 6 (Label: 4)... ERAN run completed in 0:00:03.348311
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.35s)
+  Testing image 7 (Label: 9)... ERAN run completed in 0:00:03.576084
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.58s)
+  Testing image 8 (Label: 5)... ERAN run completed in 0:00:03.504370
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.50s)
+  Testing image 9 (Label: 9)... ERAN run completed in 0:00:03.565732
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 3.57s)
+
+Processing Patch Size: 7
+  Testing image 0 (Label: 7)... ERAN run completed in 0:00:04.056397
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 4.06s)
+  Testing image 1 (Label: 2)... ERAN run completed in 0:00:04.041186
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 4.04s)
+  Testing image 2 (Label: 1)... ERAN run completed in 0:00:05.427599
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 5.43s)
+  Testing image 3 (Label: 0)... ERAN run completed in 0:00:04.666684
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 4.67s)
+  Testing image 4 (Label: 4)... ERAN run completed in 0:00:04.303129
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 4.30s)
+  Testing image 5 (Label: 1)... ERAN run completed in 0:00:05.175537
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 5.18s)
+  Testing image 6 (Label: 4)... ERAN run completed in 0:00:04.279306
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 4.28s)
+  Testing image 7 (Label: 9)... ERAN run completed in 0:00:04.691457
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 4.69s)
+  Testing image 8 (Label: 5)... ERAN run completed in 0:00:04.334635
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 4.33s)
+  Testing image 9 (Label: 9)... ERAN run completed in 0:00:04.787614
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 4.79s)
+
+Processing Patch Size: 8
+  Testing image 0 (Label: 7)... ERAN run completed in 0:00:05.348410
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 5.35s)
+  Testing image 1 (Label: 2)... ERAN run completed in 0:00:05.104606
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 5.10s)
+  Testing image 2 (Label: 1)... ERAN run completed in 0:00:06.886683
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 6.89s)
+  Testing image 3 (Label: 0)... ERAN run completed in 0:00:05.847382
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 5.85s)
+  Testing image 4 (Label: 4)... ERAN run completed in 0:00:05.647844
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 5.65s)
+  Testing image 5 (Label: 1)... ERAN run completed in 0:00:06.092938
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 6.09s)
+  Testing image 6 (Label: 4)... ERAN run completed in 0:00:05.203263
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 5.20s)
+  Testing image 7 (Label: 9)... ERAN run completed in 0:00:17.316638
+Last MILP status = 6 (CUTOFF)
+No adversarial example returned
+VERIFIED (Status: 6, Time: 17.32s)
+  Testing image 8 (Label: 5)... ERAN run completed in 0:00:05.208258
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 5.21s)
+  Testing image 9 (Label: 9)... ERAN run completed in 0:00:05.807159
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 5.81s)
+
+Processing Patch Size: 9
+  Testing image 0 (Label: 7)... ERAN run completed in 0:00:07.359086
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 7.36s)
+  Testing image 1 (Label: 2)... ERAN run completed in 0:00:06.011324
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 6.01s)
+  Testing image 2 (Label: 1)... ERAN run completed in 0:00:08.930914
+Last MILP status = 3 (INFEASIBLE)
+No adversarial example returned
+VERIFIED (Status: 3, Time: 8.93s)
+  Testing image 3 (Label: 0)... ERAN run completed in 0:00:06.920416
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 6.92s)
+  Testing image 4 (Label: 4)... ERAN run completed in 0:00:11.248583
+Last MILP status = 6 (CUTOFF)
+No adversarial example returned
+VERIFIED (Status: 6, Time: 11.25s)
+  Testing image 5 (Label: 1)... ERAN run completed in 0:00:07.506947
+Last MILP status = 3 (INFEASIBLE)
+No adversarial example returned
+VERIFIED (Status: 3, Time: 7.51s)
+  Testing image 6 (Label: 4)... ERAN run completed in 0:00:07.158830
+Last MILP status = 3 (INFEASIBLE)
+No adversarial example returned
+VERIFIED (Status: 3, Time: 7.16s)
+  Testing image 7 (Label: 9)... ERAN run completed in 0:15:54.696645
+Last MILP status = 11 (INTERRUPTED)
+Predicted class for adversarial example: 3
+Failed labels during verification using network: [2]
+Original label: 9
+VERIFIED (Status: 11, Time: 954.70s)
+  Testing image 8 (Label: 5)... ERAN run completed in 0:00:22.764820
+Last MILP status = 6 (CUTOFF)
+No adversarial example returned
+VERIFIED (Status: 6, Time: 22.76s)
+  Testing image 9 (Label: 9)... ERAN run completed in 0:00:07.431265
+Last MILP status = 3 (INFEASIBLE)
+No adversarial example returned
+VERIFIED (Status: 3, Time: 7.43s)
+
+Processing Patch Size: 10
+  Testing image 0 (Label: 7)... ERAN run completed in 0:00:54.577889
+Last MILP status = 6 (CUTOFF)
+No adversarial example returned
+VERIFIED (Status: 6, Time: 54.58s)
+  Testing image 1 (Label: 2)... ERAN run completed in 0:00:08.264462
+Last MILP status = None (UNKNOWN)
+No adversarial example returned
+VERIFIED (Status: None, Time: 8.26s)
+  Testing image 2 (Label: 1)... ERAN run completed in 0:30:19.439353
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1819.44s)
+  Testing image 3 (Label: 0)... ERAN run completed in 0:00:16.186163
+Last MILP status = 6 (CUTOFF)
+No adversarial example returned
+VERIFIED (Status: 6, Time: 16.19s)
+  Testing image 4 (Label: 4)... ERAN run completed in 1:01:20.961067
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 3680.96s)
+  Testing image 5 (Label: 1)... ERAN run completed in 0:30:11.481896
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1811.48s)
+  Testing image 6 (Label: 4)... ERAN run completed in 0:00:12.589977
+Last MILP status = 3 (INFEASIBLE)
+No adversarial example returned
+VERIFIED (Status: 3, Time: 12.59s)
+  Testing image 7 (Label: 9)... ERAN run completed in 0:30:13.609095
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1813.61s)
+  Testing image 8 (Label: 5)... ERAN run completed in 0:30:13.547527
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1813.55s)
+  Testing image 9 (Label: 9)... ERAN run completed in 0:00:10.508487
+Last MILP status = 3 (INFEASIBLE)
+No adversarial example returned
+VERIFIED (Status: 3, Time: 10.51s)
+
+Processing Patch Size: 11
+  Testing image 0 (Label: 7)... ERAN run completed in 0:31:37.818691
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1897.82s)
+  Testing image 1 (Label: 2)... ERAN run completed in 0:00:43.300151
+Last MILP status = 6 (CUTOFF)
+No adversarial example returned
+VERIFIED (Status: 6, Time: 43.30s)
+  Testing image 2 (Label: 1)... ERAN run completed in 0:19:04.420352
+Last MILP status = 11 (INTERRUPTED)
+Predicted class for adversarial example: 2
+Failed labels during verification using network: [2]
+Original label: 1
+VERIFIED (Status: 11, Time: 1144.42s)
+  Testing image 3 (Label: 0)... ERAN run completed in 0:30:17.923465
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1817.92s)
+  Testing image 4 (Label: 4)... ERAN run completed in 0:33:20.675664
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 2000.68s)
+  Testing image 5 (Label: 1)... ERAN run completed in 0:30:20.619819
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1820.62s)
+  Testing image 6 (Label: 4)... ERAN run completed in 0:00:15.672287
+Last MILP status = 3 (INFEASIBLE)
+No adversarial example returned
+VERIFIED (Status: 3, Time: 15.67s)
+  Testing image 7 (Label: 9)... ERAN run completed in 0:30:14.818787
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1814.82s)
+  Testing image 8 (Label: 5)... ERAN run completed in 0:19:36.797723
+Last MILP status = 11 (INTERRUPTED)
+Predicted class for adversarial example: 6
+Failed labels during verification using network: [6]
+Original label: 5
+VERIFIED (Status: 11, Time: 1176.80s)
+  Testing image 9 (Label: 9)... ERAN run completed in 0:00:15.299431
+Last MILP status = 3 (INFEASIBLE)
+No adversarial example returned
+VERIFIED (Status: 3, Time: 15.30s)
+
+Processing Patch Size: 12
+  Testing image 0 (Label: 7)... ERAN run completed in 0:30:22.333477
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1822.33s)
+  Testing image 1 (Label: 2)... ERAN run completed in 0:33:52.299195
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 2032.30s)
+  Testing image 2 (Label: 1)... ERAN run completed in 0:30:16.995178
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1817.00s)
+  Testing image 3 (Label: 0)... ERAN run completed in 0:31:02.057519
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1862.06s)
+  Testing image 4 (Label: 4)... ERAN run completed in 0:30:16.639698
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1816.64s)
+  Testing image 5 (Label: 1)... ERAN run completed in 0:30:16.806245
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1816.81s)
+  Testing image 6 (Label: 4)... ERAN run completed in 0:00:16.924708
+Last MILP status = 3 (INFEASIBLE)
+No adversarial example returned
+VERIFIED (Status: 3, Time: 16.92s)
+  Testing image 7 (Label: 9)... ERAN run completed in 0:30:16.182461
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1816.18s)
+  Testing image 8 (Label: 5)... ERAN run completed in 0:30:15.958906
+Last MILP status = 9 (TIME_LIMIT)
+No adversarial example returned
+VERIFIED (Status: 9, Time: 1815.96s)
+  Testing image 9 (Label: 9)... ERAN run completed in 0:00:16.169946
+Last MILP status = 3 (INFEASIBLE)
+No adversarial example returned
+VERIFIED (Status: 3, Time: 16.17s)
+
+================================================================================
+Batch verification complete!
+Total runs: 90
+Results saved to: /root/Projects/Nathan/Patch-Attack-Verification/patch_attack_verification_log.csv
+================================================================================
+
+Summary:
+  Total images tested: 10
+  Patch sizes tested: [3, 5, 6, 7, 8, 9, 10, 11, 12]
+  Adversarial examples found: 0
+  Verified (no adversarial): 90
+  Errors encountered: 0
