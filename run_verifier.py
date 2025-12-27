@@ -1,3 +1,4 @@
+import random
 import subprocess
 import re
 from datetime import datetime
@@ -8,6 +9,7 @@ import onnxruntime as ort
 import numpy as np
 import matplotlib.pyplot as plt
 from patch_input_box import *
+from utils import *
 
 # =========================
 # GLOBAL PARAMETERS
@@ -235,6 +237,48 @@ def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp
 
 	return elapsed_time, last_status, failed_labels, example, is_adversarial 
 
+
+
+def verify_image_with_sub_splits(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, split_pixels_count=4, is_random=False, split_pixels_list=None, split_value=0.5):
+	"""
+	This function verifies a specific image from the dataset using ERAN with patch attack verification.
+	It splits the verification into multiple sub-verifications by splitting pixel ranges.
+	Including prints of relevant information.
+
+	Args:
+		img_index (int): index of image to verify
+		pixels (np.ndarray): array of pixel values
+		labels (np.ndarray): array of labels
+		timeout_milp (int, optional): timeout for MILP verification. Defaults to 30.
+		split_pixels_count (int, optional): number of pixels to split. Defaults to 4.
+		is_random (bool, optional): whether to randomly select pixels to split. Defaults to False.
+		split_pixels_list (list, optional): list of pixel indices to split. Defaults to None.
+		split_value (float, optional): value to split pixels at. Defaults to 0.5.
+
+	Returns:
+		dict: results of each sub-verification
+	"""
+
+	img = pixels[img_index].reshape(28, 28)
+	label_img = labels[img_index]
+
+	results = {}
+
+	if is_random:
+		# select random pixels to split as indexes within the patch
+		split_pixels_indexes = random.sample(range(size_box * size_box), split_pixels_count)
+
+		# convert to coordinates in the image
+		split_pixels_list = [convert_index_of_patch_pixel_to_coordinates(index, x_box, y_box, size_box) for index in split_pixels_indexes]
+
+	print(f"Splitting on pixels: {split_pixels_list}")
+
+	# range of values for each split pixel.
+	split_pixels_ranges = [[[0,split_value], [split_value,1]]] * split_pixels_count
+
+	input_box_path = create_patch_input_config_file(img, x_box, y_box, size_box, label=label_img, split_pixels_list=split_pixels_list, split_pixel_range=split_pixels_ranges)
+
+	failed_labels, elapsed_time, last_status, example = run_eran(input_box_path=input_box_path, label=label_img, domain="refinepoly", complete=True, timeout_final_milp=timeout_milp, use_milp=True)
 
 
 # =========================
