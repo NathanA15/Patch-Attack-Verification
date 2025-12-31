@@ -16,14 +16,15 @@ if str(PROJECT_ROOT) not in sys.path:
 from patch_input_box import *
 from run_verifier import *
 
-GRB_LICENSE_FILE="/root/ERAN/gurobi912/linux64/gurobi.lic"
-os.environ["GRB_LICENSE_FILE"] = GRB_LICENSE_FILE
+ERAN_ROOT = PROJECT_ROOT / "util" / "ERAN"
+GRB_LICENSE_FILE = ERAN_ROOT / "gurobi912" / "linux64" / "gurobi.lic"
+os.environ["GRB_LICENSE_FILE"] = str(GRB_LICENSE_FILE)
 print(os.environ.get("GRB_LICENSE_FILE"))
 
-model_path = "/root/ERAN/tf_verify/models/mnist_convSmallRELU__PGDK.onnx"
-test_data_path = "/root/ERAN/data/mnist_test.csv"
+model_path = ERAN_ROOT / "tf_verify" / "models" / "mnist_convSmallRELU__PGDK.onnx"
+test_data_path = ERAN_ROOT / "data" / "mnist_test.csv"
 
-images_dir = "/root/Projects/Nathan/Patch-Attack-Verification/images"
+images_dir = PROJECT_ROOT / "images"
 
 # Load the CSV
 df = pd.read_csv(test_data_path, header=None)
@@ -43,7 +44,7 @@ TIMEOUT_MILP = 259200  # Timeout in seconds for MILP = (72 hours - 3 days)
 SPLIT_AMOUNTS = 3  # Number of splits for each pixel
 
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-output_log_path = f"/root/Projects/Nathan/Patch-Attack-Verification/timeoutex_split_20_pixels_img_{image_index}_patch_{patch_size}_place_{patch_x_y[0]}_{patch_x_y[1]}_split_{SPLIT_AMOUNTS}_{timestamp}.csv"
+output_log_path = PROJECT_ROOT / f"timeoutex_split_20_pixels_img_{image_index}_patch_{patch_size}_place_{patch_x_y[0]}_{patch_x_y[1]}_split_{SPLIT_AMOUNTS}_{timestamp}.csv"
 
 # Initialize results list
 results = []
@@ -64,9 +65,9 @@ try:
 		y_box=patch_x_y[1],
 		size_box=patch_size,
 		timeout_milp=TIMEOUT_MILP,
-		split_pixels_count=20,
+		split_pixels_count=10,
 		is_random=True,
-		split_amounts=3
+		split_amounts=2
 	)
 	
 	# Log the results

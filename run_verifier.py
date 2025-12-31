@@ -15,11 +15,12 @@ from utils import *
 # GLOBAL PARAMETERS
 # =========================
 
-ERAN_DIR = "/root/ERAN/tf_verify/"
+PROJECT_ROOT = Path(__file__).resolve().parent
+ERAN_DIR = PROJECT_ROOT / "util" / "ERAN" / "tf_verify"
 PYTHON_BIN = "python3"
 DATASET = "mnist"
-NETNAME = "/root/ERAN/tf_verify/models/mnist_convSmallRELU__PGDK.onnx"
-LOG_DIR = Path("/root/Projects/logs")
+NETNAME = ERAN_DIR / "models" / "mnist_convSmallRELU__PGDK.onnx"
+LOG_DIR = PROJECT_ROOT / "logs"
 
 # MILP status codes (Gurobi)
 MILP_STATUS = {

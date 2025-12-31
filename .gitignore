@@ -210,3 +210,5 @@ __marimo__/
 # my files
 input_box_configs/*
 scripts/input_box_configs
+
+*.csv
