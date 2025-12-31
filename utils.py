@@ -1,5 +1,6 @@
 from gurobipy import GRB
 
+
 def dump_callback_codes():
 	pairs = []
 	for name in dir(GRB.Callback):

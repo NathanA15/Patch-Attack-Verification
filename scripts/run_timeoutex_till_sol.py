@@ -15,18 +15,12 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from patch_input_box import *
 from run_verifier import *
+from config import *
 
-GRB_LICENSE_FILE="/root/ERAN/gurobi912/linux64/gurobi.lic"
-os.environ["GRB_LICENSE_FILE"] = GRB_LICENSE_FILE
-print(os.environ.get("GRB_LICENSE_FILE"))
 
-model_path = "/root/ERAN/tf_verify/models/mnist_convSmallRELU__PGDK.onnx"
-test_data_path = "/root/ERAN/data/mnist_test.csv"
-
-images_dir = "/root/Projects/Nathan/Patch-Attack-Verification/images"
 
 # Load the CSV
-df = pd.read_csv(test_data_path, header=None)
+df = pd.read_csv(MNIST_DATA_PATH, header=None)
 
 # Extract labels and image pixels
 labels = df.iloc[:, 0].values
@@ -35,7 +29,7 @@ pixels = df.iloc[:, 1:].values
 
 # add timestamp to output log path
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-output_log_path = f"/root/Projects/Nathan/Patch-Attack-Verification/timeout_example_max_time_img_2_patch_10_place_0_0_{timestamp}.csv"
+out_csv_path = CSV_DIR / f"timeout_example_max_time_img_2_patch_10_place_0_0_{timestamp}.csv"
 
 image_index = 2
 patch_size = 10
@@ -48,7 +42,7 @@ results = []
 
 print(f"Starting verification for index {image_index} with patch size {patch_size} at position {patch_x_y} for timeout {TIMEOUT_MILP} seconds =  {(TIMEOUT_MILP/3600)/24} days")
 print(f"example with range of 0->0.05 for patch pixels")
-print(f"Results will be saved to: {output_log_path}")
+print(f"Results will be saved to: {out_csv_path}")
 print("-" * 80)
 
 label = labels[image_index]
@@ -83,7 +77,7 @@ try:
 	
 	# Save results to CSV after each verification
 	results_df = pd.DataFrame(results)
-	results_df.to_csv(output_log_path, index=False)
+	results_df.to_csv(out_csv_path, index=False)
 	
 	status_str = "ADVERSARIAL" if is_adversarial else "VERIFIED"
 	time_seconds = elapsed_time.total_seconds() if hasattr(elapsed_time, 'total_seconds') else elapsed_time
@@ -108,11 +102,11 @@ except Exception as e:
 	
 	# Save results to CSV after each verification (even on error)
 	results_df = pd.DataFrame(results)
-	results_df.to_csv(output_log_path, index=False)
+	results_df.to_csv(out_csv_path, index=False)
 
 print("\n" + "=" * 80)
 print(f"Longest example verification complete!")
-print(f"Results saved to: {output_log_path}")
+print(f"Results saved to: {out_csv_path}")
 print("=" * 80)
 print(f"  Total adversarial examples found: {sum(1 for r in results if r.get('is_adversarial') == True)}")
 print(f"  Total verified (no adversarial): {sum(1 for r in results if r.get('is_adversarial') == False)}")

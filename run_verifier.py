@@ -10,17 +10,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from patch_input_box import *
 from utils import *
+from config import *
 
 # =========================
 # GLOBAL PARAMETERS
 # =========================
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-ERAN_DIR = PROJECT_ROOT / "util" / "ERAN" / "tf_verify"
-PYTHON_BIN = "python3"
-DATASET = "mnist"
-NETNAME = ERAN_DIR / "models" / "mnist_convSmallRELU__PGDK.onnx"
-LOG_DIR = PROJECT_ROOT / "logs"
 
 # MILP status codes (Gurobi)
 MILP_STATUS = {
@@ -148,12 +143,6 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 	Returns:
 		int: dominant class or -1 if failed
 	"""
-	LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-	timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-	daily_folder = LOG_DIR / datetime.now().strftime("%Y%m%d")
-	daily_folder.mkdir(parents=True, exist_ok=True)
-	log_file = daily_folder / f"{timestamp}_eran_run.log"
 
 	cmd = [
 		PYTHON_BIN, ".",
@@ -171,7 +160,8 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 		"--adv_label", str(adv_label),
 	]
 	start_time = datetime.now()
-	with open(log_file, "w") as f:
+	print(f"\nLog file: {LOG_FILE}")
+	with open(LOG_FILE, "w") as f:
 		subprocess.run(
 			cmd,
 			cwd=ERAN_DIR,
@@ -185,7 +175,7 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 	elapsed_time = end_time - start_time
 	print(f"ERAN run completed in {elapsed_time}")
 
-	log_text = log_file.read_text()
+	log_text = LOG_FILE.read_text()
 
 	match = re.search(r"RETURN\s+(-?\d+)", log_text)
 	if not match:

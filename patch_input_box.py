@@ -1,8 +1,8 @@
 import numpy as np
 from datetime import datetime
 import os
+from config import *
 
-input_box_configs_dir = "input_box_configs"
 
 # def stringify_box(box_config):
 #     """
@@ -74,7 +74,7 @@ def create_patch_input_box(image, i, j, c):
 
     # Replace those positions with [0, 1]
     for row, col in np.argwhere(mask):
-        box_config[row, col] = [[0,1]]
+        box_config[row, col] = [[0,0.65]]
 
     return box_config
 
@@ -123,8 +123,10 @@ def create_patch_input_config_file(image, i, j, c, label, split_pixels_list=None
     text = stringify_box_new(box_config)
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    date_stamp = datetime.now().strftime("%Y%m%d")
     filename = os.path.join(
-        input_box_configs_dir,
+        BOX_DIR,
+        date_stamp,
         f"{timestamp}_label{label}_patch_box_{i}_{j}_{c}.txt"
     )
 
