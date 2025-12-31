@@ -74,11 +74,11 @@ def create_patch_input_box(image, i, j, c):
 
     # Replace those positions with [0, 1]
     for row, col in np.argwhere(mask):
-        box_config[row, col] = [[0.0, 1.0]]
+        box_config[row, col] = [[0,1]]
 
     return box_config
 
-def create_patch_input_config_file(image, i, j, c, label, split_pixels_list=None, split_pixel_range=None):
+def create_patch_input_config_file(image, i, j, c, label, split_pixels_list=None, split_pixel_range=None, split_amounts=1):
     """
     Creates a patch input config file.
 
@@ -95,7 +95,19 @@ def create_patch_input_config_file(image, i, j, c, label, split_pixels_list=None
     """
     box_config = create_patch_input_box(image, i, j, c)
 
-    if split_pixels_list is not None and split_pixel_range is not None:
+    if split_amounts is not None and split_amounts > 1:
+        for idx, pixel in enumerate(split_pixels_list):
+            ranges = []
+            step = 1.0 / split_amounts
+            for s in range(split_amounts):
+                lb = s * step
+                ub = (s + 1) * step
+                ranges.append([lb, ub])
+            print(pixel)
+            print(ranges)
+            box_config[pixel[1], pixel[0]] = ranges
+        pass
+    elif split_pixels_list is not None and split_pixel_range is not None:
         for idx, pixel in enumerate(split_pixels_list):
             ranges = split_pixel_range[idx]
             if isinstance(ranges, np.ndarray):
@@ -103,6 +115,8 @@ def create_patch_input_config_file(image, i, j, c, label, split_pixels_list=None
             # Ensure we store a list of ranges (each range is [lb, ub])
             if len(ranges) > 0 and isinstance(ranges[0], (float, int)):
                 ranges = [ranges]
+            print(pixel)
+            print(ranges)
             box_config[pixel[1], pixel[0]] = ranges
 
     # text = stringify_box(box_config)

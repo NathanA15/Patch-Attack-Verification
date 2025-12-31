@@ -33,21 +33,22 @@ labels = df.iloc[:, 0].values
 pixels = df.iloc[:, 1:].values
 
 
-# add timestamp to output log path
-timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-output_log_path = f"/root/Projects/Nathan/Patch-Attack-Verification/timeout_example_max_time_img_2_patch_10_place_0_0_{timestamp}.csv"
+
 
 image_index = 2
 patch_size = 10
 patch_x_y = (0,0)
 
-TIMEOUT_MILP = 1800  # Timeout in seconds for MILP = 30 minutes
+TIMEOUT_MILP = 259200  # Timeout in seconds for MILP = (72 hours - 3 days)
+SPLIT_AMOUNTS = 3  # Number of splits for each pixel
+
+timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+output_log_path = f"/root/Projects/Nathan/Patch-Attack-Verification/timeoutex_split_20_pixels_img_{image_index}_patch_{patch_size}_place_{patch_x_y[0]}_{patch_x_y[1]}_split_{SPLIT_AMOUNTS}_{timestamp}.csv"
 
 # Initialize results list
 results = []
 
 print(f"Starting verification for index {image_index} with patch size {patch_size} at position {patch_x_y} for timeout {TIMEOUT_MILP} seconds =  {(TIMEOUT_MILP/3600)/24} days")
-print(f"example with range of 0->0.05 for patch pixels")
 print(f"Results will be saved to: {output_log_path}")
 print("-" * 80)
 
@@ -55,7 +56,7 @@ label = labels[image_index]
 print(f"  Testing image {image_index} (Label: {label})...", end=" ")
 
 try:
-	elapsed_time, last_status, failed_labels, example, is_adversarial = verify_image(
+	elapsed_time, last_status, failed_labels, example, is_adversarial = verify_image_with_sub_splits(
 		img_index=image_index,
 		pixels=pixels,
 		labels=labels,
@@ -63,7 +64,9 @@ try:
 		y_box=patch_x_y[1],
 		size_box=patch_size,
 		timeout_milp=TIMEOUT_MILP,
-		with_plots=False
+		split_pixels_count=20,
+		is_random=True,
+		split_amounts=3
 	)
 	
 	# Log the results

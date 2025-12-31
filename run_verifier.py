@@ -239,7 +239,7 @@ def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp
 
 
 
-def verify_image_with_sub_splits(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, split_pixels_count=4, is_random=False, split_pixels_list=None, split_value=0.5):
+def verify_image_with_sub_splits(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, split_pixels_count=4, is_random=False, split_pixels_list=None, split_value=0.5, split_amounts=1):
 	"""
 	This function verifies a specific image from the dataset using ERAN with patch attack verification.
 	It splits the verification into multiple sub-verifications by splitting pixel ranges.
@@ -266,19 +266,34 @@ def verify_image_with_sub_splits(img_index, pixels, labels, x_box, y_box, size_b
 
 	if is_random:
 		# select random pixels to split as indexes within the patch
-		split_pixels_indexes = random.sample(range(size_box * size_box), split_pixels_count)
+		split_pixels_list = random.sample(range(size_box * size_box), split_pixels_count)
 
-		# convert to coordinates in the image
-		split_pixels_list = [convert_index_of_patch_pixel_to_coordinates(index, x_box, y_box, size_box) for index in split_pixels_indexes]
+	elif not is_random and split_pixels_list is None:
+		raise ValueError("split_pixels_list should not be defined if is_random is False")
+
+	# convert to coordinates in the image
+	split_pixels_list = [convert_index_of_patch_pixel_to_coordinates(index, x_box, y_box, size_box) for index in split_pixels_list]
 
 	print(f"Splitting on pixels: {split_pixels_list}")
 
 	# range of values for each split pixel.
 	split_pixels_ranges = [[[0,split_value], [split_value,1]]] * split_pixels_count
 
-	input_box_path = create_patch_input_config_file(img, x_box, y_box, size_box, label=label_img, split_pixels_list=split_pixels_list, split_pixel_range=split_pixels_ranges)
+	input_box_path = create_patch_input_config_file(img, x_box, y_box, size_box, label=label_img, split_pixels_list=split_pixels_list, split_pixel_range=split_pixels_ranges, split_amounts=split_amounts)
 
 	failed_labels, elapsed_time, last_status, example = run_eran(input_box_path=input_box_path, label=label_img, domain="refinepoly", complete=True, timeout_final_milp=timeout_milp, use_milp=True)
+
+	is_adversarial = False
+
+	if example is None or len(example) == 0:
+		print("No adversarial example returned")
+	else:
+
+		is_adversarial = verify_adv_example(example, label_img, failed_labels)
+	
+	print(f"Sub-verification result: Elapsed time: {elapsed_time}, Last MILP status: {last_status} ({format_milp_status(last_status) if last_status is not None else 'UNKNOWN'}), Is adversarial: {is_adversarial}")
+
+	return elapsed_time, last_status, failed_labels, example, is_adversarial 
 
 
 # =========================
