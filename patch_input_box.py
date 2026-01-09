@@ -43,7 +43,7 @@ def stringify_box_new(box_config):
     return "\n".join(lines)
 
 
-def create_patch_input_box(image, i, j, c):
+def create_patch_input_box(image, i, j, c, ul=1.0):
     """
     Creates a patch input box.
 
@@ -74,11 +74,11 @@ def create_patch_input_box(image, i, j, c):
 
     # Replace those positions with [0, 1]
     for row, col in np.argwhere(mask):
-        box_config[row, col] = [[0,0.65]]
+        box_config[row, col] = [[0, ul]]
 
     return box_config
 
-def create_patch_input_config_file(image, i, j, c, label, split_pixels_list=None, split_pixel_range=None, split_amounts=1):
+def create_patch_input_config_file(image, i, j, c, label, split_pixels_list=None, split_pixel_range=None, split_amounts=1, ul=1.0):
     """
     Creates a patch input config file.
 
@@ -93,7 +93,7 @@ def create_patch_input_config_file(image, i, j, c, label, split_pixels_list=None
     Returns:
         None
     """
-    box_config = create_patch_input_box(image, i, j, c)
+    box_config = create_patch_input_box(image, i, j, c, ul=ul)
 
     if split_amounts is not None and split_amounts > 1:
         for idx, pixel in enumerate(split_pixels_list):

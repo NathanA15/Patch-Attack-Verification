@@ -541,7 +541,36 @@ def handle_tanh_sigmoid(model, var_list, affine_counter, num_neurons, lbi, ubi,
     return y_counter
 
 
-def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is_nchw=False, partial_milp=0, max_milp_neurons=-1):
+def add_patch_two_interval_splits(model: Model, patch_pixels, splits, x_lb=0.0, x_ub=1.0):
+    """
+    patch_pixels: iterable of pixel ids p (e.g., ints or tuples like (i,j,c))
+    splits: dict p -> (l1,u1,l2,u2)
+    Creates:
+    x[p]  continuous pixel variable
+    a[p]  binary selector
+    Adds:
+    x[p] <= u1 + a[p]*(u2-u1)
+    x[p] >= l1 + a[p]*(l2-l1)
+    """
+    P = list(patch_pixels)
+    # decision vars
+    x = model.addVars(P, vtype=GRB.CONTINUOUS, lb=x_lb, ub=x_ub, name="x")
+    a = model.addVars(P, vtype=GRB.BINARY, name="a")
+    # upper bound constraints
+    cu = model.addConstrs(
+        (x[p] <= splits[p][1] + a[p] * (splits[p][3] - splits[p][1]) for p in P),
+        name="split_ub"
+    )
+    # lower bound constraints
+    cl = model.addConstrs(
+        (x[p] >= splits[p][0] + a[p] * (splits[p][2] - splits[p][0]) for p in P),
+        name="split_lb"
+    )
+    return x, a, cu, cl
+
+
+
+def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is_nchw=False, partial_milp=0, max_milp_neurons=-1, add_bool_constraints=True):
     model = Model("milp")
 
     model.setParam("OutputFlag",0)
@@ -565,6 +594,7 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
     activation_counter = 0
 
     var_list = []
+    bool_var_list = []
     counter = 0
 
     ### Encode inputs, either from box or zonotope
@@ -596,8 +626,24 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
     else:
         for i in range(num_pixels):
             var_name = "x" + str(i)
+
             var = model.addVar(vtype=GRB.CONTINUOUS, lb = LB_N0[i], ub=UB_N0[i], name=var_name)
             var_list.append(var)
+            # [0, 0.65] -> [0,0.6] or [0.6, 0.65] dependent on bool var
+            if add_bool_constraints and LB_N0[i] != UB_N0[i]: # we do this only on pixels of pach automatically
+                bool_var_name = "I"+str(i)
+                bool_var = model.addVar(vtype=GRB.BINARY, name=bool_var_name)
+                bool_var_list.append(bool_var)
+                # TODO change later to middle bound = average or something else 
+                mb = 0.4
+                # if I = 0 then upper part else lower part  
+                # x <= ub - (ub - mb)*I
+                expr = var - UB_N0[i] + (UB_N0[i] - mb) * bool_var
+                model.addConstr(expr, GRB.LESS_EQUAL, 0)
+                # x >= mb - (mb - lb)*I
+                expr = var - mb + (mb - LB_N0[i]) * bool_var
+                model.addConstr(expr, GRB.GREATER_EQUAL, 0)
+
 
     start_counter = []
     start_counter.append(counter)

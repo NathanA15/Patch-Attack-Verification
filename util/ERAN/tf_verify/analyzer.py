@@ -22,6 +22,7 @@ from deepzono_nodes import *
 from functools import reduce
 from ai_milp import milp_callback
 import gc
+import time
 
 class layers:
     def __init__(self):
@@ -194,7 +195,6 @@ class Analyzer:
             return element, testing_nlb, testing_nub
         return element, nlb, nub
     
-    
     def analyze(self,terminate_on_failure=True):
         """
         analyses the network with the given input
@@ -279,13 +279,14 @@ class Analyzer:
             else:
                 adv_labels.append(self.prop)  
 
-            for label in candidate_labels: 
+            for label in candidate_labels:
+                time_start = time.time()
                 flag = True
                 for adv_label in adv_labels:
                     if self.domain == 'deepzono' or self.domain == 'refinezono':
                         if label == adv_label:
                             continue
-                        elif self.is_greater(self.man, element, label, adv_label):
+                        elif false and self.is_greater(self.man, element, label, adv_label): #TODO nathan - changed to false to disable deepzono fast check- this is is_greater
                             continue
                         else:
                             flag = False
@@ -297,6 +298,7 @@ class Analyzer:
                             continue
                         elif self.is_greater(self.man, element, label, adv_label, self.use_default_heuristic):
                             print("used is_greater to verify label", label, "against adv_label", adv_label) # Shuey - debug
+                            print("Time taken for is_greater:", time.time() - time_start) # Nathan - debug
                             continue
                         else:
                             if(self.domain=='refinepoly'): # nathan - goes here full milp only with refinepoly 
@@ -355,10 +357,12 @@ class Analyzer:
                                         
                                         if terminate_on_failure:
                                             print("Terminated on failure") #Shuey Added
+                                            print("Time taken and terminate on failure:", time.time() - time_start)
                                             break
                                     else:
                                         if not hasattr(model,"objbound") or model.objbound > 0: # this means no adversarial example found: Sl - Sadv >0 tocheck
                                             print("MILP VERIFIED SUCCESSFULLY AGAINST LABEL ", adv_label)
+                                            print("Time taken to successfully verify:", time.time() - time_start)
 
                                 else:
                                     model.optimize(lp_callback)

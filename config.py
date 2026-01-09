@@ -13,7 +13,7 @@ PYTHON_BIN = "python3"
 DATASET = "mnist"
 NETNAME = ERAN_DIR / "models" / "mnist_convSmallRELU__PGDK.onnx"
 LOG_DIR = PROJECT_ROOT / "logs"
-CSV_DIR = PROJECT_ROOT / "csv_results"
+CSV_DIR = PROJECT_ROOT / "csv"
 
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)

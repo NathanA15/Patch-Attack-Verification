@@ -29,17 +29,34 @@ pixels = df.iloc[:, 1:].values
 
 # add timestamp to output log path
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-out_csv_path = CSV_DIR / f"timeout_example_max_time_img_2_patch_10_place_0_0_{timestamp}.csv"
 
 image_index = 2
-patch_size = 10
+patch_size = 10 # need to do 10
 patch_x_y = (0,0)
 
-TIMEOUT_MILP = 1800  # Timeout in seconds for MILP = 30 minutes
+# tests ---------------------------
 
+# with 10 it verified in 23.83s without the bool constraints 
+# with bool constraint at 0.3 did 
+# upper bound at 0.6
+
+# test upper bound at 0.7
+# no bool constraints - 477.32s
+# bool constraints 
+
+
+# endtests ---------------------------
+
+
+out_csv_path = CSV_DIR / f"timeout_example_with_bool_constraints_max_time_img_{image_index}_patch_{patch_size}_place_{patch_x_y[0]}_{patch_x_y[1]}_{timestamp}.csv"
+# out_csv_path = CSV_DIR / f"timeout_trash_max_time_img_{image_index}_patch_{patch_size}_place_{patch_x_y[0]}_{patch_x_y[1]}_{timestamp}.csv"
+
+# TIMEOUT_MILP = 604800  # Timeout in seconds for MILP = 7 days
+TIMEOUT_MILP = 60*60*3 # 3 hours for testing
+upper_bound = 0.7
 # Initialize results list
 results = []
-
+print(f"This is to test adding conditions and split the input box, and all sizes to either be lower bound to mid or mid to upper bound")
 print(f"Starting verification for index {image_index} with patch size {patch_size} at position {patch_x_y} for timeout {TIMEOUT_MILP} seconds =  {(TIMEOUT_MILP/3600)/24} days")
 print(f"example with range of 0->0.05 for patch pixels")
 print(f"Results will be saved to: {out_csv_path}")
@@ -57,7 +74,8 @@ try:
 		y_box=patch_x_y[1],
 		size_box=patch_size,
 		timeout_milp=TIMEOUT_MILP,
-		with_plots=False
+		with_plots=False,
+		ul=upper_bound,
 	)
 	
 	# Log the results

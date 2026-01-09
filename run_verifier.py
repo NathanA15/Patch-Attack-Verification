@@ -196,7 +196,7 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 	return failed_labels, elapsed_time, last_status, example
 
 
-def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, with_plots=False):
+def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, with_plots=False, ul=1.0):
 	"""
 	This function verifies a specific image from the dataset using ERAN with patch attack verification.
 	And plots the adversarial example if found.
@@ -213,7 +213,7 @@ def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp
 	label_img = labels[img_index]
 
 	# patch size 11 finds adversarial example for index 7
-	input_box_path = create_patch_input_config_file(img, x_box, y_box, size_box, label=label_img)
+	input_box_path = create_patch_input_config_file(img, x_box, y_box, size_box, label=label_img, ul=ul)
 	failed_labels, elapsed_time, last_status, example = run_eran(input_box_path=input_box_path, label=label_img, domain="refinepoly", complete=True, timeout_final_milp=timeout_milp, use_milp=True) #, adv_labels=[2]
 	
 	is_adversarial = False
@@ -230,7 +230,7 @@ def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp
 
 
 
-def verify_image_with_sub_splits(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, split_pixels_count=4, is_random=False, split_pixels_list=None, split_value=0.5, split_amounts=1):
+def verify_image_with_sub_splits(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, split_pixels_count=4, is_random=False, split_pixels_list=None, split_value=0.5, split_amounts=1, ul=1.0):
 	"""
 	This function verifies a specific image from the dataset using ERAN with patch attack verification.
 	It splits the verification into multiple sub-verifications by splitting pixel ranges.
@@ -270,7 +270,7 @@ def verify_image_with_sub_splits(img_index, pixels, labels, x_box, y_box, size_b
 	# range of values for each split pixel.
 	split_pixels_ranges = [[[0,split_value], [split_value,1]]] * split_pixels_count
 
-	input_box_path = create_patch_input_config_file(img, x_box, y_box, size_box, label=label_img, split_pixels_list=split_pixels_list, split_pixel_range=split_pixels_ranges, split_amounts=split_amounts)
+	input_box_path = create_patch_input_config_file(img, x_box, y_box, size_box, label=label_img, split_pixels_list=split_pixels_list, split_pixel_range=split_pixels_ranges, split_amounts=split_amounts, ul=ul)
 
 	failed_labels, elapsed_time, last_status, example = run_eran(input_box_path=input_box_path, label=label_img, domain="refinepoly", complete=True, timeout_final_milp=timeout_milp, use_milp=True)
 
@@ -302,3 +302,8 @@ if __name__ == "__main__":
 		input_box_path=args.input_box_path,
 		domain=args.domain
 	)
+
+
+
+
+
