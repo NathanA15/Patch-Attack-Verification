@@ -569,10 +569,9 @@ def add_patch_two_interval_splits(model: Model, patch_pixels, splits, x_lb=0.0, 
     return x, a, cu, cl
 
 
-
-def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is_nchw=False, partial_milp=0, max_milp_neurons=-1, add_bool_constraints=True):
+def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is_nchw=False, partial_milp=0, max_milp_neurons=-1, add_bool_constraints=True, use_refine_poly=True, middle_bound=0.5):
     model = Model("milp")
-
+    model.Params.Threads = 16 # thread counts which represent CPU cores
     model.setParam("OutputFlag",0)
     model.setParam(GRB.Param.FeasibilityTol, 2e-5)
 
@@ -624,6 +623,8 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
             expr.addConstant(nn.zonotope[i][0])
             model.addConstr(expr, GRB.EQUAL, 0)
     else:
+        if add_bool_constraints:
+            print("Adding boolean constraints for input pixels")
         for i in range(num_pixels):
             var_name = "x" + str(i)
 
@@ -635,13 +636,13 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
                 bool_var = model.addVar(vtype=GRB.BINARY, name=bool_var_name)
                 bool_var_list.append(bool_var)
                 # TODO change later to middle bound = average or something else 
-                mb = 0.4
+
                 # if I = 0 then upper part else lower part  
                 # x <= ub - (ub - mb)*I
-                expr = var - UB_N0[i] + (UB_N0[i] - mb) * bool_var
+                expr = var - UB_N0[i] + (UB_N0[i] - middle_bound) * bool_var
                 model.addConstr(expr, GRB.LESS_EQUAL, 0)
                 # x >= mb - (mb - lb)*I
-                expr = var - mb + (mb - LB_N0[i]) * bool_var
+                expr = var - middle_bound + (middle_bound - LB_N0[i]) * bool_var
                 model.addConstr(expr, GRB.GREATER_EQUAL, 0)
 
 
@@ -803,7 +804,7 @@ def get_bounds_for_layer_with_milp(nn, LB_N0, UB_N0, layerno, abs_layer_count, o
     indices = []
 
     model.setParam(GRB.Param.TimeLimit, timeout)
-    model.setParam(GRB.Param.Threads, 2)
+    # model.setParam(GRB.Param.Threads, 2)
     output_counter = counter
 
     model.update()

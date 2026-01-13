@@ -126,7 +126,9 @@ def verify_adv_example(example, label_img, failed_labels):
 
 
 
-def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_complete: int = 60, use_milp: bool = False, label: int = -1, timeout_final_milp: int = 30, adv_label: int = -1) -> int:
+def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_complete: int = 60, use_milp: bool = False, 
+			 label: int = -1, timeout_final_milp: int = 30, adv_label: int = -1, add_bool_constraints=True, use_refine_poly=True,
+			 middle_bound=0.5) -> int:
 	""" 
 	Run eran and extract dominant class or -1 if hasn't succeeded
 	Dominant class is the class given to all permutated images in the range.
@@ -144,6 +146,8 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 		int: dominant class or -1 if failed
 	"""
 
+
+
 	cmd = [
 		PYTHON_BIN, ".",
 		"--dataset", DATASET,
@@ -158,6 +162,9 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 		"--timeout_final_milp", str(timeout_final_milp), # this is the right one to set
 		"--label", str(label),
 		"--adv_label", str(adv_label),
+		"--add_bool_constraints", str(add_bool_constraints),
+		"--use_refine_poly", str(use_refine_poly),
+		"--middle_bound", str(middle_bound),
 	]
 	start_time = datetime.now()
 	print(f"\nLog file: {LOG_FILE}")
@@ -196,7 +203,7 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 	return failed_labels, elapsed_time, last_status, example
 
 
-def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, with_plots=False, ul=1.0):
+def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, with_plots=False, ul=1.0, add_bool_constraints=True, use_refine_poly=True, middle_bound=0.5):
 	"""
 	This function verifies a specific image from the dataset using ERAN with patch attack verification.
 	And plots the adversarial example if found.
@@ -214,7 +221,9 @@ def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp
 
 	# patch size 11 finds adversarial example for index 7
 	input_box_path = create_patch_input_config_file(img, x_box, y_box, size_box, label=label_img, ul=ul)
-	failed_labels, elapsed_time, last_status, example = run_eran(input_box_path=input_box_path, label=label_img, domain="refinepoly", complete=True, timeout_final_milp=timeout_milp, use_milp=True) #, adv_labels=[2]
+	failed_labels, elapsed_time, last_status, example = run_eran(input_box_path=input_box_path, label=label_img, domain="refinepoly", complete=True, 
+															  timeout_final_milp=timeout_milp, use_milp=True, add_bool_constraints=add_bool_constraints, use_refine_poly=use_refine_poly,
+															  middle_bound=middle_bound) #, adv_labels=[2]
 	
 	is_adversarial = False
 
@@ -230,7 +239,8 @@ def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp
 
 
 
-def verify_image_with_sub_splits(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, split_pixels_count=4, is_random=False, split_pixels_list=None, split_value=0.5, split_amounts=1, ul=1.0):
+def verify_image_with_sub_splits(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, split_pixels_count=4, is_random=False, split_pixels_list=None, 
+								 split_value=0.5, split_amounts=1, ul=1.0, add_bool_constraints=True, use_refine_poly=True, middle_bound=0.5):
 	"""
 	This function verifies a specific image from the dataset using ERAN with patch attack verification.
 	It splits the verification into multiple sub-verifications by splitting pixel ranges.
@@ -272,7 +282,8 @@ def verify_image_with_sub_splits(img_index, pixels, labels, x_box, y_box, size_b
 
 	input_box_path = create_patch_input_config_file(img, x_box, y_box, size_box, label=label_img, split_pixels_list=split_pixels_list, split_pixel_range=split_pixels_ranges, split_amounts=split_amounts, ul=ul)
 
-	failed_labels, elapsed_time, last_status, example = run_eran(input_box_path=input_box_path, label=label_img, domain="refinepoly", complete=True, timeout_final_milp=timeout_milp, use_milp=True)
+	failed_labels, elapsed_time, last_status, example = run_eran(input_box_path=input_box_path, label=label_img, domain="refinepoly", complete=True, 
+															  timeout_final_milp=timeout_milp, use_milp=True, add_bool_constraints=add_bool_constraints, use_refine_poly=use_refine_poly, middle_bound=middle_bound) #, adv_labels=[2]
 
 	is_adversarial = False
 
@@ -287,21 +298,21 @@ def verify_image_with_sub_splits(img_index, pixels, labels, x_box, y_box, size_b
 	return elapsed_time, last_status, failed_labels, example, is_adversarial 
 
 
-# =========================
-# MAIN ENTRY POINT
-# =========================
+# # =========================
+# # MAIN ENTRY POINT
+# # =========================
 
-if __name__ == "__main__":
-	parser = argparse.ArgumentParser(description="Run ERAN and extract RETURN value")
-	parser.add_argument("--input_box_path", required=True, help="Path to input box file")
-	parser.add_argument("--domain", required=True, help="Verification domain (e.g. deeppoly)")
+# if __name__ == "__main__":
+# 	parser = argparse.ArgumentParser(description="Run ERAN and extract RETURN value")
+# 	parser.add_argument("--input_box_path", required=True, help="Path to input box file")
+# 	parser.add_argument("--domain", required=True, help="Verification domain (e.g. deeppoly)")
 
-	args = parser.parse_args()
+# 	args = parser.parse_args()
 
-	run_eran(
-		input_box_path=args.input_box_path,
-		domain=args.domain
-	)
+# 	run_eran(
+# 		input_box_path=args.input_box_path,
+# 		domain=args.domain
+# 	)
 
 
 

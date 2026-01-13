@@ -87,3 +87,6 @@ class config:
 
     label= -1 # Label to verify against
     adv_label = -1 # Adversarial label to verify against
+    add_bool_constraints=True
+    use_refine_poly=True
+    middle_bound=0.5

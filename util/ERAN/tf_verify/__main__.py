@@ -384,6 +384,9 @@ parser.add_argument("--approx_k", type=str2bool, default=config.approx_k, help="
 
 parser.add_argument("--label", type=int, default=config.label, help="Label to verify against")
 parser.add_argument("--adv_label", type=int, default=config.adv_label, help="Adversarial label to verify against")
+parser.add_argument("--add_bool_constraints", type=str2bool, default=config.add_bool_constraints, help="Whether to add boolean constraints")
+parser.add_argument("--use_refine_poly", type=str2bool, default=config.use_refine_poly, help="Whether to use refined poly")
+parser.add_argument("--middle_bound", type=float, default=config.middle_bound, help="Middle bound value in milp verifier")
 
 # Logging options
 parser.add_argument('--logdir', type=str, default=None, help='Location to save logs to. If not specified, logs are not saved and emitted to stdout')
@@ -1144,7 +1147,8 @@ elif config.input_box is not None:
         normalize(specLB, means, stds, dataset)
         normalize(specUB, means, stds, dataset)
         print("adv_label ", config.adv_label)
-        hold, nn, nlb, nub, failed_labels, adversarial_ex = eran.analyze_box(specLB, specUB, domain, config.timeout_lp, config.timeout_milp, config.use_default_heuristic, constraints, complete=config.complete, timeout_final_milp=config.timeout_final_milp, label=config.label, prop=config.adv_label) # nathan added use of complete flag, timeout_final_milp, added label and adv_labels
+        hold, nn, nlb, nub, failed_labels, adversarial_ex = eran.analyze_box(specLB, specUB, domain, config.timeout_lp, config.timeout_milp, config.use_default_heuristic, constraints, complete=config.complete, timeout_final_milp=config.timeout_final_milp, label=config.label, prop=config.adv_label,
+        add_bool_constraints=config.add_bool_constraints, use_refine_poly=config.use_refine_poly, middle_bound=config.middle_bound) # nathan added use of complete flag, timeout_final_milp, added label and adv_labels
 
         # if adversarial_ex is not None:
         #     denormalize(adversarial_ex, means, stds, dataset) #shuey added

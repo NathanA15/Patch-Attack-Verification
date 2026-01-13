@@ -42,18 +42,24 @@ patch_x_y = (0,0)
 
 # test upper bound at 0.7
 # no bool constraints - 477.32s
-# bool constraints 
+# bool constraints to check
 
-
+# test upper bound at 0.85
+# with bool constraints ...
+# without not done yet
 # endtests ---------------------------
 
 
 out_csv_path = CSV_DIR / f"timeout_example_with_bool_constraints_max_time_img_{image_index}_patch_{patch_size}_place_{patch_x_y[0]}_{patch_x_y[1]}_{timestamp}.csv"
 # out_csv_path = CSV_DIR / f"timeout_trash_max_time_img_{image_index}_patch_{patch_size}_place_{patch_x_y[0]}_{patch_x_y[1]}_{timestamp}.csv"
 
-# TIMEOUT_MILP = 604800  # Timeout in seconds for MILP = 7 days
-TIMEOUT_MILP = 60*60*3 # 3 hours for testing
-upper_bound = 0.7
+TIMEOUT_MILP = 604800  # Timeout in seconds for MILP = 7 days
+# TIMEOUT_MILP = 60*60*3 # 3 hours for testing
+UPPER_BOUND = 0.7
+ADD_BOOL_CONSTRAINTS=False
+USE_REFINE_POLY=False
+MIDDLE_BOUND=0.35
+
 # Initialize results list
 results = []
 print(f"This is to test adding conditions and split the input box, and all sizes to either be lower bound to mid or mid to upper bound")
@@ -75,7 +81,10 @@ try:
 		size_box=patch_size,
 		timeout_milp=TIMEOUT_MILP,
 		with_plots=False,
-		ul=upper_bound,
+		ul=UPPER_BOUND,
+		add_bool_constraints=ADD_BOOL_CONSTRAINTS, 
+		use_refine_poly=USE_REFINE_POLY,
+		middle_bound=MIDDLE_BOUND
 	)
 	
 	# Log the results

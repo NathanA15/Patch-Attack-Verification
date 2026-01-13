@@ -195,7 +195,7 @@ class Analyzer:
             return element, testing_nlb, testing_nub
         return element, nlb, nub
     
-    def analyze(self,terminate_on_failure=True):
+    def analyze(self,terminate_on_failure=True, add_bool_constraints=True, use_refine_poly=True, middle_bound=0.5):
         """
         analyses the network with the given input
         
@@ -230,7 +230,9 @@ class Analyzer:
             self.nn.tile_counter = 0
             self.nn.residual_counter = 0
             self.nn.activation_counter = 0
-            counter, var_list, model = create_model(self.nn, self.nn.specLB, self.nn.specUB, nlb, nub, self.relu_groups, self.nn.numlayer, self.complete, partial_milp=-1, max_milp_neurons=-1) # nathan - added last two params readd those partial_milp=-1, max_milp_neurons=-1
+            counter, var_list, model = create_model(self.nn, self.nn.specLB, self.nn.specUB, nlb, nub, self.relu_groups, self.nn.numlayer, self.complete, partial_milp=-1, max_milp_neurons=-1, add_bool_constraints=add_bool_constraints,use_refine_poly=use_refine_poly, middle_bound=middle_bound) # nathan - added last two params readd those partial_milp=-1, max_milp_neurons=-1
+            total = model.NumConstrs + model.NumQConstrs + model.NumGenConstrs
+            print("Total constraints (all types):", total) # 137587 with bool_constraints // 137387 without // logical because diff is 200 and 2 constraints for each pixel 
             if self.partial_milp != 0:
                 self.nn.ffn_counter = 0
                 self.nn.conv_counter = 0
@@ -247,6 +249,9 @@ class Analyzer:
                                                                                                self.complete,
                                                                                                partial_milp=self.partial_milp,
                                                                                                max_milp_neurons=self.max_milp_neurons)
+                
+
+                
                 model_partial_milp.setParam(GRB.Param.TimeLimit, self.timeout_final_milp)
 
             if self.complete:
@@ -280,13 +285,13 @@ class Analyzer:
                 adv_labels.append(self.prop)  
 
             for label in candidate_labels:
-                time_start = time.time()
                 flag = True
                 for adv_label in adv_labels:
+                    time_start = time.time()
                     if self.domain == 'deepzono' or self.domain == 'refinezono':
                         if label == adv_label:
                             continue
-                        elif false and self.is_greater(self.man, element, label, adv_label): #TODO nathan - changed to false to disable deepzono fast check- this is is_greater
+                        elif self.is_greater(self.man, element, label, adv_label): #TODO nathan - changed to false to disable deepzono fast check- this is is_greater
                             continue
                         else:
                             flag = False
@@ -296,7 +301,7 @@ class Analyzer:
                     else:
                         if label == adv_label:
                             continue
-                        elif self.is_greater(self.man, element, label, adv_label, self.use_default_heuristic):
+                        elif use_refine_poly and self.is_greater(self.man, element, label, adv_label, self.use_default_heuristic):
                             print("used is_greater to verify label", label, "against adv_label", adv_label) # Shuey - debug
                             print("Time taken for is_greater:", time.time() - time_start) # Nathan - debug
                             continue
