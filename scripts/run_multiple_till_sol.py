@@ -15,10 +15,10 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import run_verifier
-from config import LOG_DIR, MNIST_DATA_PATH
+from config import LOG_DIR, MNIST_DATA_PATH, CSV_DIR
 
 
-RUNS_CSV_PATH = Path("/root/Projects/Shuey/Patch-Attack-Verification/runs.csv")
+RUNS_CSV_PATH = Path(CSV_DIR) / "multiple_intervals_milp_test.csv"
 
 CSV_COLUMNS = [
     "Image Index",
@@ -26,7 +26,7 @@ CSV_COLUMNS = [
     "Y patch",
     " Patch Size",
     "Upper bound",
-    "MIDDLE BOUND",
+    "Bounds List",
     " Run Time (s)",
     "Second Run Time (s)",
     "Status",
@@ -36,33 +36,46 @@ CSV_COLUMNS = [
     "CSV path",
 ]
 
+
+# IMAGE_INDEX = 2
+# PATCH_SIZE = 10
+# PATCH_X_Y = (0, 0)
+# PARAMETER_RUNS = [
+#     (0.7, True, [[0,0.23],[0.23, 0.46],[0.46,0.7]]),
+#     (0.7, True, [[0,0.175],[0.175, 0.35],[0.35,0.525],[0.525,0.7]]),
+#     (0.7, True, [[0,0.14],[0.14, 0.28],[0.28,0.42],[0.42,0.56],[0.56,0.7]]),
+#     (0.7, True, [[0,0.116],[0.116, 0.233],[0.233,0.35],[0.35,0.466],[0.466,0.583],[0.583,0.7]]),
+#     (0.7, False, None),
+#     # (0.7, True, 0.65),
+#     # (0.7, True, 0.35),
+# ]
+
+
+IMAGE_INDEX = 7
+PATCH_SIZE = 9
+PATCH_X_Y = (0,0)
 PARAMETER_RUNS = [
-    (0.65, False, None),
-    (0.65, True, 0.3),
-    (0.65, True, 0.6),
-    (0.65, True, 0.05),
-    (0.65, True, 0.64),
-    (0.7, False, None),
-    (0.7, True, 0.6),
-    (0.7, True, 0.65),
-    (0.7, True, 0.35),
-    (0.75, False, None),
-    (0.75, True, 0.7),
-    (0.75, True, 0.55),
-    (0.75, True, 0.35),
-    (0.8, False, None),
-    (0.8, True, 0.75),
-    (0.8, True, 0.5),
+    # (1, True, [[0,0.23],[0.23, 0.46],[0.46,0.7]]),
+    # (0.7, True, [[0,0.175],[0.175, 0.35],[0.35,0.525],[0.525,0.7]]),
+    # (0.7, True, [[0,0.14],[0.14, 0.28],[0.28,0.42],[0.42,0.56],[0.56,0.7]]),
+    #(1, False, [[0,0.15],[0.15, 0.3],[0.3,0.45],[0.45,0.6],[0.6,0.75],[0.75,0.9],[0.9,1]]),
+    (1, True, [[0,0.5],[0.5,1]]),
+    (1, True, [[0,0.33],[0.33, 0.66],[0.66,1]]),
+    (1, True, [[0,0.25],[0.25, 0.5],[0.5,0.75],[0.75,1]]),
+    (1, True, [[0,0.2],[0.2, 0.4],[0.4,0.6],[0.6,0.8],[0.8,1]]),
+    (1, True, [[0,0.15],[0.15, 0.3],[0.3,0.45],[0.45,0.6],[0.6,0.75],[0.75,0.9],[0.9,1]]),
+    # (0.7, True, [[0,0.116],[0.116, 0.233],[0.233,0.35],[0.35,0.466],[0.466,0.583],[0.583,0.7]]),
+    # (0.7, False, None),
+    # (0.7, True, 0.65),
+    # (0.7, True, 0.35),
 ]
 
-DEFAULT_MIDDLE_BOUND = 0.5
+
+DEFAULT_BOUNDS = []
 
 TIMEOUT_MILP = 604800  # 7 days
 USE_REFINE_POLY = False
 
-IMAGE_INDEX = 2
-PATCH_SIZE = 10
-PATCH_X_Y = (0, 0)
 
 
 def fresh_log_file():
@@ -111,17 +124,17 @@ def main():
     print(f"Results will be appended to: {RUNS_CSV_PATH}")
     print("-" * 80)
 
-    for run_idx, (upper_bound, add_bool_constraints, middle_bound) in enumerate(
+    for run_idx, (upper_bound, add_bool_constraints, bounds_list) in enumerate(
         PARAMETER_RUNS, start=1
     ):
-        display_middle = "" if middle_bound is None else middle_bound
-        run_middle = DEFAULT_MIDDLE_BOUND if middle_bound is None else middle_bound
+        display_bounds = "" if bounds_list is None else bounds_list
+        run_bounds = DEFAULT_BOUNDS if bounds_list is None else bounds_list
         log_file = fresh_log_file()
         run_verifier.LOG_FILE = log_file
 
         print(
             f"[{run_idx}/{total_runs}] upper={upper_bound} add_bool={add_bool_constraints} "
-            f"middle={display_middle or 'n/a'} log={log_file}"
+            f"bounds={display_bounds or 'n/a'} log={log_file}"
         )
 
         try:
@@ -138,7 +151,7 @@ def main():
                     ul=upper_bound,
                     add_bool_constraints=add_bool_constraints,
                     use_refine_poly=USE_REFINE_POLY,
-                    middle_bound=run_middle,
+                    bounds=run_bounds,
                 )
             )
 
@@ -155,7 +168,7 @@ def main():
                 "Y patch": PATCH_X_Y[1],
                 " Patch Size": PATCH_SIZE,
                 "Upper bound": upper_bound,
-                "MIDDLE BOUND": display_middle,
+                "Bounds List": display_bounds,
                 " Run Time (s)": int(round(time_seconds)),
                 "Second Run Time (s)": "",
                 "Status": status,
@@ -177,7 +190,7 @@ def main():
                 "Y patch": PATCH_X_Y[1],
                 " Patch Size": PATCH_SIZE,
                 "Upper bound": upper_bound,
-                "MIDDLE BOUND": display_middle,
+                "Bounds List": display_bounds,
                 " Run Time (s)": "",
                 "Second Run Time (s)": "",
                 "Status": "Error",

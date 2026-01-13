@@ -569,7 +569,7 @@ def add_patch_two_interval_splits(model: Model, patch_pixels, splits, x_lb=0.0, 
     return x, a, cu, cl
 
 
-def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is_nchw=False, partial_milp=0, max_milp_neurons=-1, add_bool_constraints=True, use_refine_poly=True, middle_bound=0.5):
+def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is_nchw=False, partial_milp=0, max_milp_neurons=-1, add_bool_constraints=True, use_refine_poly=True, middle_bound=0.5, config_param:config =None):
     model = Model("milp")
     model.Params.Threads = 16 # thread counts which represent CPU cores
     model.setParam("OutputFlag",0)
@@ -625,6 +625,7 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
     else:
         if add_bool_constraints:
             print("Adding boolean constraints for input pixels")
+        print("bounds list ", config_param.bounds)
         for i in range(num_pixels):
             var_name = "x" + str(i)
 
@@ -632,18 +633,38 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
             var_list.append(var)
             # [0, 0.65] -> [0,0.6] or [0.6, 0.65] dependent on bool var
             if add_bool_constraints and LB_N0[i] != UB_N0[i]: # we do this only on pixels of pach automatically
-                bool_var_name = "I"+str(i)
-                bool_var = model.addVar(vtype=GRB.BINARY, name=bool_var_name)
-                bool_var_list.append(bool_var)
-                # TODO change later to middle bound = average or something else 
+                bounds_list = config_param.bounds
+                bounds_len = len(bounds_list)
+                
+                I = range(bounds_len)
 
-                # if I = 0 then upper part else lower part  
-                # x <= ub - (ub - mb)*I
-                expr = var - UB_N0[i] + (UB_N0[i] - middle_bound) * bool_var
-                model.addConstr(expr, GRB.LESS_EQUAL, 0)
-                # x >= mb - (mb - lb)*I
-                expr = var - middle_bound + (middle_bound - LB_N0[i]) * bool_var
-                model.addConstr(expr, GRB.GREATER_EQUAL, 0)
+                # tuple_dict
+                bool_vars = model.addVars(I, 
+                                          vtype=GRB.BINARY, 
+                                          name=["I_pixel_"+str(i)+"_"+str(b) for b in I])
+
+                model.addConstr(bool_vars.sum() == 1)
+                
+                model.addConstr(
+                    var <= sum(bool_vars[b] * bounds_list[b][1] for b in I)
+                )
+                model.addConstr(
+                    var >= sum(bool_vars[b] * bounds_list[b][0] for b in I)
+                )
+
+                # OLD IMPLEMENTATION WITH TWO INTERVALS ONLY
+                # bool_var_name = "I"+str(i)
+                # bool_var = model.addVar(vtype=GRB.BINARY, name=bool_var_name)
+                # bool_var_list.append(bool_var)
+                # # TODO change later to middle bound = average or something else 
+
+                # # if I = 0 then upper part else lower part  
+                # # x <= ub - (ub - mb)*I
+                # expr = var - UB_N0[i] + (UB_N0[i] - middle_bound) * bool_var
+                # model.addConstr(expr, GRB.LESS_EQUAL, 0)
+                # # x >= mb - (mb - lb)*I
+                # expr = var - middle_bound + (middle_bound - LB_N0[i]) * bool_var
+                # model.addConstr(expr, GRB.GREATER_EQUAL, 0)
 
 
     start_counter = []

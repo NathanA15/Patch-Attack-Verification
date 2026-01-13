@@ -90,3 +90,4 @@ class config:
     add_bool_constraints=True
     use_refine_poly=True
     middle_bound=0.5
+    bounds=[]
