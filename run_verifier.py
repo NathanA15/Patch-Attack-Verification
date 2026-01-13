@@ -117,7 +117,7 @@ def verify_adv_example(example, label_img, failed_labels):
 	"""
 
 	ex = np.array(example, dtype=np.float32).reshape(1, 1, 28, 28) # dimension 1x1x28x28
-	predicted_class = np.argmax(run_onnx(NETNAME, ex)[0])
+	predicted_class = np.argmax(run_onnx(str(NETNAME), ex)[0])
 	print("Predicted class for adversarial example:", predicted_class)
 	print("Failed labels during verification using network:", failed_labels)
 	print("Original label:", label_img)
@@ -128,7 +128,8 @@ def verify_adv_example(example, label_img, failed_labels):
 
 def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_complete: int = 60, use_milp: bool = False, 
 			 label: int = -1, timeout_final_milp: int = 30, adv_label: int = -1, add_bool_constraints=True, use_refine_poly=True,
-			 middle_bound=0.5) -> int:
+			 middle_bound=0.5,
+			 bounds: list=[]) -> int:
 	""" 
 	Run eran and extract dominant class or -1 if hasn't succeeded
 	Dominant class is the class given to all permutated images in the range.
@@ -165,6 +166,7 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 		"--add_bool_constraints", str(add_bool_constraints),
 		"--use_refine_poly", str(use_refine_poly),
 		"--middle_bound", str(middle_bound),
+		"--bounds", str(bounds)
 	]
 	start_time = datetime.now()
 	print(f"\nLog file: {LOG_FILE}")
@@ -203,7 +205,7 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 	return failed_labels, elapsed_time, last_status, example
 
 
-def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, with_plots=False, ul=1.0, add_bool_constraints=True, use_refine_poly=True, middle_bound=0.5):
+def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp=30, with_plots=False, ul=1.0, add_bool_constraints=True, use_refine_poly=True, middle_bound=0.5, bounds=[]):
 	"""
 	This function verifies a specific image from the dataset using ERAN with patch attack verification.
 	And plots the adversarial example if found.
@@ -223,7 +225,8 @@ def verify_image(img_index, pixels, labels, x_box, y_box, size_box, timeout_milp
 	input_box_path = create_patch_input_config_file(img, x_box, y_box, size_box, label=label_img, ul=ul)
 	failed_labels, elapsed_time, last_status, example = run_eran(input_box_path=input_box_path, label=label_img, domain="refinepoly", complete=True, 
 															  timeout_final_milp=timeout_milp, use_milp=True, add_bool_constraints=add_bool_constraints, use_refine_poly=use_refine_poly,
-															  middle_bound=middle_bound) #, adv_labels=[2]
+															  middle_bound=middle_bound,
+															  bounds=bounds) #, adv_labels=[2]
 	
 	is_adversarial = False
 

@@ -45,6 +45,7 @@ from onnx_translator import *
 from optimizer import *
 from analyzer import *
 from pprint import pprint
+import json
 # if config.domain=='gpupoly' or config.domain=='refinegpupoly':
 from refine_gpupoly import *
 from utils import parse_vnn_lib_prop, translate_output_constraints, translate_input_to_box, negate_cstr_or_list_old
@@ -387,6 +388,8 @@ parser.add_argument("--adv_label", type=int, default=config.adv_label, help="Adv
 parser.add_argument("--add_bool_constraints", type=str2bool, default=config.add_bool_constraints, help="Whether to add boolean constraints")
 parser.add_argument("--use_refine_poly", type=str2bool, default=config.use_refine_poly, help="Whether to use refined poly")
 parser.add_argument("--middle_bound", type=float, default=config.middle_bound, help="Middle bound value in milp verifier")
+parser.add_argument("--bounds", type=json.loads, default=config.bounds, help="bounds for milp verifier")
+
 
 # Logging options
 parser.add_argument('--logdir', type=str, default=None, help='Location to save logs to. If not specified, logs are not saved and emitted to stdout')
@@ -1141,6 +1144,11 @@ elif config.input_box is not None:
     boxes = parse_input_box(tests)
     index = 1
     correct = 0
+    # normalize bounds
+    if config.bounds is not None:
+        mean = float(means[0])
+        std = float(stds[0])
+        config.bounds = [[(lb - mean) / std, (ub - mean) / std] for lb, ub in config.bounds]
     for box in boxes:
         specLB = [interval[0] for interval in box]
         specUB = [interval[1] for interval in box]
@@ -1148,7 +1156,7 @@ elif config.input_box is not None:
         normalize(specUB, means, stds, dataset)
         print("adv_label ", config.adv_label)
         hold, nn, nlb, nub, failed_labels, adversarial_ex = eran.analyze_box(specLB, specUB, domain, config.timeout_lp, config.timeout_milp, config.use_default_heuristic, constraints, complete=config.complete, timeout_final_milp=config.timeout_final_milp, label=config.label, prop=config.adv_label,
-        add_bool_constraints=config.add_bool_constraints, use_refine_poly=config.use_refine_poly, middle_bound=config.middle_bound) # nathan added use of complete flag, timeout_final_milp, added label and adv_labels
+        add_bool_constraints=config.add_bool_constraints, use_refine_poly=config.use_refine_poly, middle_bound=config.middle_bound, config_param=config) # nathan added use of complete flag, timeout_final_milp, added label and adv_labels
 
         # if adversarial_ex is not None:
         #     denormalize(adversarial_ex, means, stds, dataset) #shuey added

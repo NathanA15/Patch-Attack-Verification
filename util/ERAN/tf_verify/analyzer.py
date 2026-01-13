@@ -23,6 +23,8 @@ from functools import reduce
 from ai_milp import milp_callback
 import gc
 import time
+from config import config
+
 
 class layers:
     def __init__(self):
@@ -195,7 +197,7 @@ class Analyzer:
             return element, testing_nlb, testing_nub
         return element, nlb, nub
     
-    def analyze(self,terminate_on_failure=True, add_bool_constraints=True, use_refine_poly=True, middle_bound=0.5):
+    def analyze(self,terminate_on_failure=True, add_bool_constraints=True, use_refine_poly=True, middle_bound=0.5, config_param:config =None):
         """
         analyses the network with the given input
         
@@ -230,7 +232,7 @@ class Analyzer:
             self.nn.tile_counter = 0
             self.nn.residual_counter = 0
             self.nn.activation_counter = 0
-            counter, var_list, model = create_model(self.nn, self.nn.specLB, self.nn.specUB, nlb, nub, self.relu_groups, self.nn.numlayer, self.complete, partial_milp=-1, max_milp_neurons=-1, add_bool_constraints=add_bool_constraints,use_refine_poly=use_refine_poly, middle_bound=middle_bound) # nathan - added last two params readd those partial_milp=-1, max_milp_neurons=-1
+            counter, var_list, model = create_model(self.nn, self.nn.specLB, self.nn.specUB, nlb, nub, self.relu_groups, self.nn.numlayer, self.complete, partial_milp=-1, max_milp_neurons=-1, add_bool_constraints=add_bool_constraints,use_refine_poly=use_refine_poly, middle_bound=middle_bound, config_param=config_param) # nathan - added last two params readd those partial_milp=-1, max_milp_neurons=-1
             total = model.NumConstrs + model.NumQConstrs + model.NumGenConstrs
             print("Total constraints (all types):", total) # 137587 with bool_constraints // 137387 without // logical because diff is 200 and 2 constraints for each pixel 
             if self.partial_milp != 0:
