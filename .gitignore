@@ -211,5 +211,5 @@ __marimo__/
 input_box_configs/*
 scripts/input_box_configs
 
-*.csv
-!runs.csv
+# *.csv
+# !runs.csv
