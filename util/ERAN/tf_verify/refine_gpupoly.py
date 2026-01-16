@@ -200,7 +200,7 @@ def refine_gpupoly_results(nn, network, num_gpu_layers, relu_layers, true_label,
             pass
         elif partial_milp != 0 and not complete:
             if model.Status == 2:
-                x_adv = np.array(model.x[0:len(nn.specLB)])
+                x_adv = np.array(model.getAttr("x", var_list[:len(nn.specLB)]))
                 is_not_shown_unsafe = network.test(x_adv, x_adv, int(true_label))
             else:
                 is_not_shown_unsafe = True
@@ -242,7 +242,7 @@ def refine_gpupoly_results(nn, network, num_gpu_layers, relu_layers, true_label,
             flag = False
         if not flag and model.Status == 2 and model.objval < 0:
             if model.objval != math.inf:
-                x = model.x[0:len(nn.specLB)]
+                x = model.getAttr("x", var_list[:len(nn.specLB)])
 
         if not flag:
                 break

@@ -651,7 +651,54 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
                 model.addConstr(
                     var >= sum(bool_vars[b] * bounds_list[b][0] for b in I)
                 )
+                
+            # NEW IMPLEMENTATION WITH log_2(bounds_len) BINARY VARIABLES
+            if add_bool_constraints and LB_N0[i] != UB_N0[i]:
+                bounds_list = config_param.bounds
+                bounds_len = len(bounds_list)
+                
+                # 1. Calculate how many bits we need (Log2)
+                num_bits = math.ceil(math.log2(bounds_len))
+                
+                # 2. Create the reduced Binary Variables (The "Bits")
+                # These represent the index of the chosen interval in binary
+                bin_vars = model.addVars(num_bits, 
+                                        vtype=GRB.BINARY, 
+                                        name=f"Bit_pixel_{i}")
+                
+                # 3. Create Auxiliary Continuous Variables (The "Selectors")
+                # These replace your original bool_vars but are CONTINUOUS (easier to solve)
+                aux_vars = model.addVars(bounds_len, 
+                                        vtype=GRB.CONTINUOUS, 
+                                        lb=0.0, ub=1.0, 
+                                        name=f"Aux_pixel_{i}")
 
+                # 4. Standard Convex Combination Constraints
+                # Exactly one aux_var will end up being 1.0, others 0.0
+                model.addConstr(aux_vars.sum() == 1, name=f"Sum_Aux_{i}")
+                
+                # 5. Link Binary Bits to Auxiliary Variables
+                # If a bit is 1, only aux_vars with that bit set to 1 can be non-zero
+                for b in range(num_bits):
+                    # Find all indices where the b-th bit is 1
+                    indices_with_bit_set = [j for j in range(bounds_len) if (j >> b) & 1]
+                    
+                    if indices_with_bit_set:
+                        model.addConstr(
+                            sum(aux_vars[j] for j in indices_with_bit_set) == bin_vars[b],
+                            name=f"Link_Bit_{i}_{b}"
+                        )
+
+                # 6. Apply the Bounds using the Auxiliary Variables
+                # effectively: x <= 1*U_chosen + 0*U_others
+                model.addConstr(
+                    var <= sum(aux_vars[j] * bounds_list[j][1] for j in range(bounds_len)),
+                    name=f"UB_Constr_{i}"
+                )
+                model.addConstr(
+                    var >= sum(aux_vars[j] * bounds_list[j][0] for j in range(bounds_len)),
+                    name=f"LB_Constr_{i}"
+                )
                 # OLD IMPLEMENTATION WITH TWO INTERVALS ONLY
                 # bool_var_name = "I"+str(i)
                 # bool_var = model.addVar(vtype=GRB.BINARY, name=bool_var_name)
@@ -974,11 +1021,11 @@ def verify_network_with_milp(nn, LB_N0, UB_N0, nlb, nub, constraints, spatial_co
             if model.Status == 6 or model.objbound > 0:
                 or_result = True
                 if model.solcount > 0:
-                    non_adv_examples.append(model.x[0:input_size])
+                    non_adv_examples.append(model.getAttr("x", var_list[:input_size]))
                     non_adv_val.append(model.objval)
                 break
             elif model.solcount > 0:
-                adv_examples.append(model.x[0:input_size])
+                adv_examples.append(model.getAttr("x", var_list[:input_size]))
                 adv_val.append(model.objval)
 
         if not or_result:
@@ -1002,7 +1049,7 @@ def verify_network_with_milp(nn, LB_N0, UB_N0, nlb, nub, constraints, spatial_co
                 print(f"MILP adex model status: {model.Status}, Model solution count: {sol_count}, Final solve time: {model.Runtime:.3f}")
                 if model.solcount > 0:
                     # This yields a guaranteed adversarial example
-                    adv_examples = [model.x[0:input_size]]
+                    adv_examples = [model.getAttr("x", var_list[:input_size])]
                     adv_val = [None]
                 # The below portion enables the use of feasibility instead of optimization based  certification.
                 # This is not recommended as GUROBI is known to sometimes return spurious infeasibility

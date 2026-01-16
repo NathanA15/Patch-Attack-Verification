@@ -358,7 +358,8 @@ class Analyzer:
                                             label_failed.append(adv_label)
                                         
                                         if model.solcount > 0: # means adversarial example found
-                                            x = model.x[0:len(self.nn.specLB)]
+                                            # Pull input vars directly so bool vars don't shift indices.
+                                            x = model.getAttr("x", var_list[:len(self.nn.specLB)])
 
                                         print("adv found against adv_label ", adv_label)
                                         
@@ -417,7 +418,7 @@ class Analyzer:
                                         flag = False
                                     if flag and model.Status==2 and model.objval < 0:
                                         if model.objval != math.inf:
-                                            x = model.x[0:len(self.nn.specLB)]
+                                            x = model.getAttr("x", var_list[:len(self.nn.specLB)])
 
                             else:
                                 flag = False
