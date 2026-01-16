@@ -1,0 +1,11 @@
+# Ignore everything by default
+*
+
+# Allow directories (needed so Git can descend)
+!*/
+
+# Allow only Python files
+!/ERAN/tf_verify/*.py
+
+# Always allow the gitignore itself
+!.gitignore

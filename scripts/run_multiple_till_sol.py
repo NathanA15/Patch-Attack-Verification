@@ -17,8 +17,9 @@ if str(PROJECT_ROOT) not in sys.path:
 import run_verifier
 from config import LOG_DIR, MNIST_DATA_PATH, CSV_DIR
 
+time = __import__("time")
 
-RUNS_CSV_PATH = Path(CSV_DIR) / "multiple_intervals_milp_test_14_01_26.csv"
+RUNS_CSV_PATH = Path(CSV_DIR) / f"multiple_intervals_milp_test_log_bool_values_{time.strftime('%Y_%m_%d_%H_%M_%S')}.csv"
 
 CSV_COLUMNS = [
     "Image Index",
