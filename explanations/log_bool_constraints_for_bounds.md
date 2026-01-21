@@ -107,3 +107,6 @@ if add_bool_constraints and LB_N0[i] != UB_N0[i]:
         var >= sum(aux_vars[j] * bounds_list[j][0] for j in range(bounds_len)),
         name=f"LB_Constr_{i}"
     )
+
+
+
