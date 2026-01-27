@@ -1,0 +1,2 @@
+Image Index,X patch,Y patch, Patch Size,Upper bound,Bounds List, Run Time (s),Second Run Time (s),Status,Used Only MILP, Comment,Log path,CSV path
+2,0,0,10,0.8,"[[0, 0.04], [0.04, 0.21], [0.21, 0.47], [0.47, 0.8]]",36958,,Verified,True,Ran from run_multiple_till_sol.py,/root/Projects/Nathan/Patch-Attack-Verification/logs/20260121/20260121_042327_eran_run.log,

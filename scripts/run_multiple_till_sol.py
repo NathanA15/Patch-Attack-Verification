@@ -1,5 +1,5 @@
 """
-Run the timeout example across multiple parameter settings and append results to runs.csv.
+Run the timeout example across multiple parameter settings and optionally append results to a CSV file.
 """
 
 import csv
@@ -20,6 +20,7 @@ from config import LOG_DIR, MNIST_DATA_PATH, CSV_DIR
 time = __import__("time")
 
 RUNS_CSV_PATH = Path(CSV_DIR) / f"milp_test_log_bool_values_singular_samples_{time.strftime('%Y_%m_%d_%H_%M_%S')}.csv"
+SAVE_CSV = False
 
 CSV_COLUMNS = [
     "Image Index",
@@ -43,10 +44,13 @@ PATCH_SIZE = 10
 PATCH_X_Y = (0, 0)
 
 PARAMETER_RUNS = [
-    # 0.80 (3–5 intervals, non-uniform)
-    (0.8, True, [[0, 0.09], [0.09, 0.36], [0.36, 0.8]]),
-    (0.8, True, [[0, 0.04], [0.04, 0.21], [0.21, 0.47], [0.47, 0.8]]),
+    (0.65, False, None),
 ]
+# PARAMETER_RUNS = [
+#     # 0.80 (3–5 intervals, non-uniform)
+#     (0.8, True, [[0, 0.09], [0.09, 0.36], [0.36, 0.8]]),
+#     (0.8, True, [[0, 0.04], [0.04, 0.21], [0.21, 0.47], [0.47, 0.8]]),
+# ]
 # PARAMETER_RUNS = [
 #     #uniform interval 
 #     (0.7, True, [[0, 0.23], [0.23, 0.46], [0.46, 0.7]]),  # uniform interval
@@ -124,7 +128,7 @@ PARAMETER_RUNS = [
 
 DEFAULT_BOUNDS = []
 
-TIMEOUT_MILP = 604800  # 7 days
+TIMEOUT_MILP = 25  # 3 minute
 USE_REFINE_POLY = False
 
 
@@ -150,6 +154,8 @@ def ensure_trailing_newline(path: Path):
 
 
 def append_run_row(row):
+    if not SAVE_CSV:
+        return
     RUNS_CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
     file_exists = RUNS_CSV_PATH.exists()
     if file_exists:
@@ -172,7 +178,10 @@ def main():
         f"Starting verification for index {IMAGE_INDEX} with patch size {PATCH_SIZE} at {PATCH_X_Y}"
     )
     print(f"Timeout per run: {TIMEOUT_MILP} seconds")
-    print(f"Results will be appended to: {RUNS_CSV_PATH}")
+    if not SAVE_CSV:
+        print("CSV saving disabled.")
+    else:
+        print(f"Results will be appended to: {RUNS_CSV_PATH}")
     print("-" * 80)
 
     for run_idx, (upper_bound, add_bool_constraints, bounds_list) in enumerate(
@@ -226,7 +235,7 @@ def main():
                 "Used Only MILP": True,
                 " Comment": "Ran from run_multiple_till_sol.py",
                 "Log path": str(log_file),
-                "CSV path": "",
+                "CSV path": "" if not SAVE_CSV else str(RUNS_CSV_PATH),
             }
             append_run_row(row)
 
@@ -248,7 +257,7 @@ def main():
                 "Used Only MILP": True,
                 " Comment": f"error: {exc}",
                 "Log path": str(log_file),
-                "CSV path": "",
+                "CSV path": "" if not SAVE_CSV else str(RUNS_CSV_PATH),
             }
             append_run_row(row)
             print(f"  ERROR: {exc}")

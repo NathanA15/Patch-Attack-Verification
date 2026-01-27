@@ -81,7 +81,24 @@ def parse_adversarial_examples(text):
 		return ast.literal_eval(match.group(1))
 	except (ValueError, SyntaxError):
 		return None
-	
+
+def parse_relaxed_example(text):
+    # We must escape the parentheses '(' and ')' with backslashes
+    # We use re.DOTALL so the dot (.) matches newlines, in case the list is long
+    pattern = r"Best RELAXED \(fractional\) values:\s*(\[.*?\])"
+    
+    match = re.search(pattern, text, re.DOTALL)
+
+    if not match:
+        return None
+
+    try:
+        # safely convert the string representation of the list into a real list
+        return ast.literal_eval(match.group(1))
+    except (ValueError, SyntaxError):
+        return None
+
+
 # def parse_milp_status(text):
 # 	match = re.search(r"MILP status is\s+(\d+)", text)
 # 	if not match:
@@ -129,7 +146,8 @@ def verify_adv_example(example, label_img, failed_labels):
 def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_complete: int = 60, use_milp: bool = False, 
 			 label: int = -1, timeout_final_milp: int = 30, adv_label: int = -1, add_bool_constraints=True, use_refine_poly=True,
 			 middle_bound=0.5,
-			 bounds: list=[]) -> int:
+			 bounds: list=[],
+			 ) -> int:
 	""" 
 	Run eran and extract dominant class or -1 if hasn't succeeded
 	Dominant class is the class given to all permutated images in the range.
@@ -197,6 +215,8 @@ def run_eran(input_box_path: str, domain: str, complete: bool = False, timeout_c
 	failed_labels = parse_failed_labels(log_text)
 
 	statuses = parse_milp_statuses(log_text)
+
+	relaxed_example = parse_relaxed_example(log_text)
 
 	last_status = statuses[-1] if statuses else None # last one because break_on_failure is true
 

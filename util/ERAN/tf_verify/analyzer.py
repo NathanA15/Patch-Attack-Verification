@@ -319,34 +319,38 @@ class Analyzer:
 
                                     
                                     model.optimize(milp_callback) # Nathan - this does the work of milp
-                                    
-                                    # # ---------------Nathan
-                                    # print("LP status is", model.Status)
-                                    # obj = model.ObjVal
-                                    # print("LP objective is", obj)
-                                    
-
-                                    # if obj <= 0.0:
-                                    #     flag = False
-                                    #     if self.label != -1:
-                                    #         label_failed.append(adv_label)
-
-                                    #     # For LP, if status is optimal, we have a solution and can read model.X
-                                    #     if model.Status == GRB.OPTIMAL:
-                                    #         x = model.X[0:len(self.nn.specLB)]
-
-                                    #     print("adv found against adv_label", adv_label)
-
-                                    #     if terminate_on_failure:
-                                    #         break
-                                    # else:
-                                    #     print("VERIFIED SUCCESSFULLY AGAINST LABEL", adv_label)
-                                    # # ---------------------- Nathan end
-
-
 
                                     print("MILP status is ", model.Status) #Shuey Added
                                     print("Solcount is: ", model.solcount) #Shuey Added
+
+                                    if model.Status == 9 and model.SolCount == 0: # time limit reached
+                                        print("Solcount: ", model.SolCount)
+                                        relaxed_model = model.relax()
+                                        relaxed_model.optimize()
+                                        relaxed_vals = []
+                                        for v in var_list[:len(self.nn.specLB)]:
+                                            # Find the corresponding variable in the relaxed model
+                                            relaxed_var = relaxed_model.getVarByName(v.VarName)
+                                            if relaxed_var:
+                                                relaxed_vals.append(relaxed_var.X)
+                                            else:
+                                                relaxed_vals.append(0) # Fallback if var not found
+                                        
+                                        x_values = relaxed_vals
+                                        print("Best RELAXED (fractional) values:", x_values)
+
+                                        
+                                    elif model.Status == 9 and model.SolCount > 0:
+                                        # print("Timeout reached during MILP solve")
+                                        vars = model.getVars()
+                                        print("vars: ", vars)
+                                        solution = {v.VarName: v.x for v in model.getVars()}
+                                        print("Extracted solution at timeout\n")
+                                        print(solution)
+                                        x = model.getAttr("x", var_list[:len(self.nn.specLB)])
+                                        print("x is \n", x) 
+
+
                                     try:
                                         print("MILP objbound is ", model.objbound) #Shuey Added
                                     except:

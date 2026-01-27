@@ -572,7 +572,9 @@ def add_patch_two_interval_splits(model: Model, patch_pixels, splits, x_lb=0.0, 
 def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is_nchw=False, partial_milp=0, max_milp_neurons=-1, add_bool_constraints=True, use_refine_poly=True, middle_bound=0.5, config_param:config =None):
     model = Model("milp")
     model.Params.Threads = 16 # thread counts which represent CPU cores
-    model.setParam("OutputFlag",0)
+    # model.setParam("MIPFocus", 1) # param for getting solution before timeout
+    # model.setParam("Heuristics", 1) 
+    # model.setParam("OutputFlag",0)
     model.setParam(GRB.Param.FeasibilityTol, 2e-5)
 
     milp_activation_layers = np.nonzero([l in ["ReLU", "Maxpool"] for l in nn.layertypes])[0]
@@ -660,6 +662,7 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
                 bounds_len = len(bounds_list)
                 
                 # 1. Calculate how many bits we need (Log2)
+                # max(2, bounds_len)
                 num_bits = math.ceil(math.log2(bounds_len))
                 
                 # 2. Create the reduced Binary Variables (The "Bits")
