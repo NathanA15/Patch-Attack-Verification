@@ -634,28 +634,7 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
             var = model.addVar(vtype=GRB.CONTINUOUS, lb = LB_N0[i], ub=UB_N0[i], name=var_name)
             var_list.append(var)
             # [0, 0.65] -> [0,0.6] or [0.6, 0.65] dependent on bool var
-            
-            # OLD IMPLEMENTATION WITH ONE BOOL PER INTERVAL
-            # if add_bool_constraints and LB_N0[i] != UB_N0[i]: # we do this only on pixels of pach automatically
-            #     bounds_list = config_param.bounds
-            #     bounds_len = len(bounds_list)
-                
-            #     I = range(bounds_len)
-
-            #     # tuple_dict
-            #     bool_vars = model.addVars(I, 
-            #                               vtype=GRB.BINARY, 
-            #                               name=["I_pixel_"+str(i)+"_"+str(b) for b in I])
-
-            #     model.addConstr(bool_vars.sum() == 1)
-                
-            #     model.addConstr(
-            #         var <= sum(bool_vars[b] * bounds_list[b][1] for b in I)
-            #     )
-            #     model.addConstr(
-            #         var >= sum(bool_vars[b] * bounds_list[b][0] for b in I)
-            #     )
-                
+                            
             # NEW IMPLEMENTATION WITH log_2(bounds_len) BINARY VARIABLES
             if add_bool_constraints and LB_N0[i] != UB_N0[i]:
                 bounds_list = config_param.bounds
@@ -704,19 +683,6 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
                     var >= sum(aux_vars[j] * bounds_list[j][0] for j in range(bounds_len)),
                     name=f"LB_Constr_{i}"
                 )
-                # OLD IMPLEMENTATION WITH TWO INTERVALS ONLY
-                # bool_var_name = "I"+str(i)
-                # bool_var = model.addVar(vtype=GRB.BINARY, name=bool_var_name)
-                # bool_var_list.append(bool_var)
-                # # TODO change later to middle bound = average or something else 
-
-                # # if I = 0 then upper part else lower part  
-                # # x <= ub - (ub - mb)*I
-                # expr = var - UB_N0[i] + (UB_N0[i] - middle_bound) * bool_var
-                # model.addConstr(expr, GRB.LESS_EQUAL, 0)
-                # # x >= mb - (mb - lb)*I
-                # expr = var - middle_bound + (middle_bound - LB_N0[i]) * bool_var
-                # model.addConstr(expr, GRB.GREATER_EQUAL, 0)
 
 
     start_counter = []

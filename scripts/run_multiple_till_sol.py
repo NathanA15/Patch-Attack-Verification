@@ -46,6 +46,8 @@ PATCH_X_Y = (0, 0)
 PARAMETER_RUNS = [
     (0.65, False, None),
 ]
+
+
 # PARAMETER_RUNS = [
 #     # 0.80 (3–5 intervals, non-uniform)
 #     (0.8, True, [[0, 0.09], [0.09, 0.36], [0.36, 0.8]]),
@@ -124,7 +126,6 @@ PARAMETER_RUNS = [
 #     # (0.7, True, 0.65),
 #     # (0.7, True, 0.35),
 # ]
-
 
 DEFAULT_BOUNDS = []
 

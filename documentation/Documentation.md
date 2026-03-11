@@ -50,3 +50,25 @@ Run with multiple bounds using trivial boolean values for any number of interval
 This csv "multiple_intervals_milp_test_log_bool_values_2026_01_16_17_22_12.csv" compares trivial boolean encoding where we have N Boolean values for N elements in our bounds list (bounds list - represent the partition of the pixels upper and lower bound) to logarithmic boolean encoding where we have N continuous variables and log(N) boolean variables.
 We saw that log boolean encoding improved the time for the run compared to the trivial encoding, But compared to a regular run with a single bounds [0, Upperbound] improvement wasnt assured, and was mostly dependent on how the bounds were chosen and how many bounds there were.
 
+
+## Next Step 
+After timeout, we solve relaxed model to get continuous solution to problem which "was already" solved by the integer model
+From relaxed example, we derived which are the pixels in the patch that have the biggest gradient on the function: 
+```python
+    z_correct = outputs[0, correct_class_idx]
+    z_target  = outputs[0, target_class_idx]
+    
+    margin = z_correct - z_target
+```
+example in derive_bounds_test jupyter notebook
+next we do unnormalize to get the closest value that caused this big gradient and we then split the top30 pixels (ordered by gradients) at the value of the relaxed example 
+and rerun 
+need to do the infra to rerun all this with new bounds, preferably all inside eran and not rerun everything.
+
+## 11/03/2026 - Come Back after holiday
+
+We don't think we need to do unnormalize to the relaxed example we extracted, because in the end we normalize pictures to pass them to the model.
+So assuming our example is already in normalized values, we keep it as is and derive the important pixels from it.
+
+Current test: we want to replace the bounds param from the config which represent the one bound that will be the same for all pixels, to a bounds list per pixel
+so that each pixel can get different bounds.
