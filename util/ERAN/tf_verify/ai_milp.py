@@ -628,6 +628,19 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
         if add_bool_constraints:
             print("Adding boolean constraints for input pixels")
         print("bounds list ", config_param.bounds)
+        bounds_config = config_param.bounds
+        bounds_are_per_pixel = (
+            isinstance(bounds_config, (list, tuple))
+            and len(bounds_config) > 0
+            and isinstance(bounds_config[0], (list, tuple))
+            and len(bounds_config[0]) > 0
+            and isinstance(bounds_config[0][0], (list, tuple, np.ndarray))
+        )
+        if bounds_are_per_pixel and len(bounds_config) != num_pixels:
+            raise ValueError(
+                f"Per-pixel bounds length ({len(bounds_config)}) does not match "
+                f"number of input pixels ({num_pixels})."
+            )
         for i in range(num_pixels):
             var_name = "x" + str(i)
 
@@ -637,7 +650,9 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
                             
             # NEW IMPLEMENTATION WITH log_2(bounds_len) BINARY VARIABLES
             if add_bool_constraints and LB_N0[i] != UB_N0[i]:
-                bounds_list = config_param.bounds
+                bounds_list = bounds_config[i] if bounds_are_per_pixel else bounds_config
+                if not bounds_list:
+                    raise ValueError("Bounds list is empty; cannot add boolean constraints.")
                 bounds_len = len(bounds_list)
                 
                 # 1. Calculate how many bits we need (Log2)

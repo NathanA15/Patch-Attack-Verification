@@ -136,3 +136,54 @@ def create_patch_input_config_file(image, i, j, c, label, split_pixels_list=None
         f.write(text)
     
     return os.path.abspath(filename)
+
+
+def build_per_pixel_bounds_for_patch(
+    image_shape,
+    x_box,
+    y_box,
+    size_box,
+    patch_bounds,
+    default_bounds=None,
+    patch_bounds_by_pixel=None,
+):
+    """
+    Build per-pixel bounds list aligned with ERAN's flattened input order (row-major).
+
+    Args:
+        image_shape: Tuple like (H, W) or (H, W, C). Only H/W are used.
+        x_box (int): Patch top-left x (column).
+        y_box (int): Patch top-left y (row).
+        size_box (int): Patch size (assumed square).
+        patch_bounds (list): List of [lb, ub] intervals applied to all patch pixels.
+        default_bounds (list, optional): Bounds list for non-patch pixels. Defaults to [].
+        patch_bounds_by_pixel (dict, optional): Map (x, y) -> bounds list to override
+            patch_bounds for specific pixels.
+
+    Returns:
+        list: Per-pixel bounds list of length H*W, where each entry is a list of intervals.
+    """
+    if size_box <= 0:
+        raise ValueError("size_box must be > 0")
+    if patch_bounds is None:
+        raise ValueError("patch_bounds must be provided")
+    if default_bounds is None:
+        default_bounds = []
+
+    height, width = image_shape[:2]
+    if x_box < 0 or y_box < 0 or x_box + size_box > width or y_box + size_box > height:
+        raise ValueError("Patch box is out of image bounds")
+
+    def copy_bounds(bounds_list):
+        return [list(interval) for interval in bounds_list]
+
+    per_pixel_bounds = [copy_bounds(default_bounds) for _ in range(height * width)]
+    patch_bounds_by_pixel = patch_bounds_by_pixel or {}
+
+    for row in range(y_box, y_box + size_box):
+        for col in range(x_box, x_box + size_box):
+            idx = row * width + col
+            bounds_list = patch_bounds_by_pixel.get((col, row), patch_bounds)
+            per_pixel_bounds[idx] = copy_bounds(bounds_list)
+
+    return per_pixel_bounds
