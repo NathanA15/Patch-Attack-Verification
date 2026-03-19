@@ -187,3 +187,36 @@ def build_per_pixel_bounds_for_patch(
             per_pixel_bounds[idx] = copy_bounds(bounds_list)
 
     return per_pixel_bounds
+
+
+def subdivide_bounds_at_indices(bounds_list_per_pixel, indices_to_split):
+    """
+    Subdivide the bounds of specific pixels by splitting each interval in half.
+
+    Args:
+        bounds_list_per_pixel (list): A 1D list where each element is a list of
+            [lb, ub] intervals for that pixel.
+            Example: [[[0, 1]], [[0, 1]]]
+        indices_to_split (list): List of pixel indices whose bounds should be subdivided.
+
+    Returns:
+        list: A new bounds_list_per_pixel with the specified pixels' intervals split in half.
+
+    Example:
+        >>> bounds = [[[0, 1]], [[0, 1]]]
+        >>> subdivide_bounds_at_indices(bounds, [1])
+        [[[0, 1]], [[0, 0.5], [0.5, 1]]]
+    """
+    result = [list(intervals) for intervals in bounds_list_per_pixel]
+
+    for idx in indices_to_split:
+        current_intervals = result[idx]
+        new_intervals = []
+        for lb, ub in current_intervals:
+            mid = (lb + ub) / 2.0
+            new_intervals.append([lb, mid])
+            new_intervals.append([mid, ub])
+        result[idx] = new_intervals
+
+    return result
+

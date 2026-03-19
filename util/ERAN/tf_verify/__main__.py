@@ -196,6 +196,48 @@ def denormalize(image, means, stds, dataset):
             image[i] = tmp[i]
 
 
+def normalize_bounds_config(bounds_config, mean, std):
+    """
+    Normalize bounds while preserving shape.
+    Supported shapes:
+    - Global intervals: [[lb, ub], ...]
+    - Per-pixel intervals: [[[lb, ub], ...], ...]
+    """
+    if bounds_config is None:
+        return None
+
+    def normalize_interval(interval):
+        if not isinstance(interval, (list, tuple, np.ndarray)) or len(interval) != 2:
+            raise ValueError(
+                "Each bounds interval must be [lb, ub]. "
+                f"Got: {interval}"
+            )
+        lb, ub = interval
+        if isinstance(lb, (list, tuple, np.ndarray)) or isinstance(ub, (list, tuple, np.ndarray)):
+            raise ValueError(
+                "Each bounds interval must contain scalar endpoints. "
+                f"Got: {interval}"
+            )
+        return [(lb - mean) / std, (ub - mean) / std]
+
+    if len(bounds_config) == 0:
+        return []
+
+    bounds_are_per_pixel = (
+        isinstance(bounds_config[0], (list, tuple, np.ndarray))
+        and len(bounds_config[0]) > 0
+        and isinstance(bounds_config[0][0], (list, tuple, np.ndarray))
+    )
+
+    if bounds_are_per_pixel:
+        return [
+            [normalize_interval(interval) for interval in pixel_bounds]
+            for pixel_bounds in bounds_config
+        ]
+
+    return [normalize_interval(interval) for interval in bounds_config]
+
+
 def model_predict(base, input):
     if is_onnx:
         pred = base.run(input)
@@ -1148,7 +1190,7 @@ elif config.input_box is not None:
     if config.bounds is not None:
         mean = float(means[0])
         std = float(stds[0])
-        config.bounds = [[(lb - mean) / std, (ub - mean) / std] for lb, ub in config.bounds]
+        config.bounds = normalize_bounds_config(config.bounds, mean, std)
     for box in boxes:
         specLB = [interval[0] for interval in box]
         specUB = [interval[1] for interval in box]

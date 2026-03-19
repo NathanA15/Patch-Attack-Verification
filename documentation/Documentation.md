@@ -72,3 +72,8 @@ So assuming our example is already in normalized values, we keep it as is and de
 
 Current test: we want to replace the bounds param from the config which represent the one bound that will be the same for all pixels, to a bounds list per pixel
 so that each pixel can get different bounds.
+
+Results:
+	- 31.49s for verifying Label 2 without split
+	- 25.83 for verifiying Label 2 after first split on 30 pixels
+	- 25.63 for verifiying Label 2 after second split on 30 pixels (same pixels to split)

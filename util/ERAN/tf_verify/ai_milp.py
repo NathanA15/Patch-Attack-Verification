@@ -631,10 +631,9 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
         bounds_config = config_param.bounds
         bounds_are_per_pixel = (
             isinstance(bounds_config, (list, tuple))
-            and len(bounds_config) > 0
-            and isinstance(bounds_config[0], (list, tuple))
+            and len(bounds_config) > 0 # good
+            and isinstance(bounds_config[0], (list, tuple)) # checks that el 0 is a list or tuple 
             and len(bounds_config[0]) > 0
-            and isinstance(bounds_config[0][0], (list, tuple, np.ndarray))
         )
         if bounds_are_per_pixel and len(bounds_config) != num_pixels:
             raise ValueError(
@@ -648,7 +647,7 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
             var_list.append(var)
             # [0, 0.65] -> [0,0.6] or [0.6, 0.65] dependent on bool var
                             
-            # NEW IMPLEMENTATION WITH log_2(bounds_len) BINARY VARIABLES
+            # IMPLEMENTATION WITH log_2(bounds_len) BINARY VARIABLES
             if add_bool_constraints and LB_N0[i] != UB_N0[i]:
                 bounds_list = bounds_config[i] if bounds_are_per_pixel else bounds_config
                 if not bounds_list:
