@@ -322,7 +322,8 @@ class Analyzer:
 
                                     model.optimize(milp_callback) # Nathan - this does the work of milp
 
-                                    print("MILP status is ", model.Status) #Shuey Added
+                                    # print("MILP status is ", model.Status) #Shuey Added
+                                    print(f"Adv_label: {adv_label}, Status: {model.Status}")
                                     print("Solcount is: ", model.solcount) #Shuey Added
 
                                     obj_bound = model.objbound if hasattr(model, "objbound") else None

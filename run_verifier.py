@@ -126,7 +126,7 @@ def parse_relaxed_example(text):
 def parse_milp_statuses(text):
     """Extract all MILP status codes emitted in the log."""
 
-    return [int(x) for x in re.findall(r"MILP status is\s+(\d+)", text)]
+    return [int(x) for x in re.findall(r"Adv_label:\s*\d+\s*,\s*Status:\s+(\d+)", text)]
 
 
 def format_milp_status(status_code):
@@ -141,6 +141,13 @@ def parse_return_value(text):
     """Extract the final RETURN value from ERAN log output."""
 
     match = re.search(r"RETURN\s+(-?\d+)", text)
+    return int(match.group(1)) if match else None
+
+
+def parse_logged_status_code(text):
+    """Extract a status code from the ERAN per-adversarial-label log format."""
+
+    match = re.search(r"Adv_label:\s*\d+\s*,\s*Status:\s+(\d+)", text)
     return int(match.group(1)) if match else None
 
 
@@ -161,8 +168,7 @@ def parse_label_results(text, failed_labels=None):
         end = counter_matches[idx + 1].start() if idx + 1 < len(counter_matches) else len(text)
         block = text[start:end]
 
-        status_match = re.search(r"MILP status is\s+(\d+)", block)
-        status_code = int(status_match.group(1)) if status_match else None
+        status_code = parse_logged_status_code(block)
         relaxed_example = parse_relaxed_example(block)
         model_verified = bool(
             re.search(r"MILP VERIFIED SUCCESSFULLY AGAINST LABEL\s+%d\b" % adv_label, block)
@@ -198,6 +204,18 @@ def build_candidate_last_statuses(label_results):
     return candidate_last_statuses
 
 
+def build_adv_label_last_statuses(label_results):
+    """Build a map from adversarial label to its last recorded MILP status."""
+
+    adv_label_last_statuses = {}
+    for result in label_results:
+        adv_label = result.get("adv_label")
+        if adv_label is None:
+            continue
+        adv_label_last_statuses[int(adv_label)] = result.get("milp_status")
+    return adv_label_last_statuses
+
+
 def parse_log_details(text):
     """Collect structured verification details from a raw ERAN log string."""
 
@@ -211,6 +229,7 @@ def parse_log_details(text):
         "failed_labels": failed_labels,
         "label_results": label_results,
         "candidate_last_statuses": build_candidate_last_statuses(label_results),
+        "adv_label_last_statuses": build_adv_label_last_statuses(label_results),
         "statuses": statuses,
         "last_status": statuses[-1] if statuses else None,
         "relaxed_example": parse_relaxed_example(text),
@@ -349,12 +368,10 @@ def run_eran(
         details["last_status"],
         f"({format_milp_status(details['last_status']) if details['last_status'] is not None else 'UNKNOWN'})",
     )
-    if details["candidate_last_statuses"]:
-        formatted_statuses = {
-            candidate_label: format_milp_status(status_code)
-            for candidate_label, status_code in details["candidate_last_statuses"].items()
-        }
-        print("Per-candidate last MILP statuses =", formatted_statuses)
+    if details["adv_label_last_statuses"]:
+        print("Per-adversarial-label statuses:")
+        for current_adv_label, status_code in sorted(details["adv_label_last_statuses"].items()):
+            print(f"Adv label: {current_adv_label}, Status: {status_code} {format_milp_status(status_code)}")
     return details
 
 
@@ -519,6 +536,7 @@ def verify_image(
         "adv_label": adv_label,
         "label_results": final_label_results,
         "candidate_last_statuses": run_details["candidate_last_statuses"],
+        "adv_label_last_statuses": run_details["adv_label_last_statuses"],
         "relaxed_example": run_details["relaxed_example"],
     }
 
