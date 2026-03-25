@@ -14,38 +14,60 @@ from patch_input_box import *
 from utils import *
 
 
+# =========================
+# GLOBAL PARAMETERS
+# =========================
+
+
+# MILP status codes (Gurobi)
 MILP_STATUS = {
-    "LOADED": 1,
-    "OPTIMAL": 2,
-    "INFEASIBLE": 3,
-    "INF_OR_UNBD": 4,
-    "UNBOUNDED": 5,
-    "CUTOFF": 6,
-    "ITERATION_LIMIT": 7,
-    "NODE_LIMIT": 8,
-    "TIME_LIMIT": 9,
-    "SOLUTION_LIMIT": 10,
-    "INTERRUPTED": 11,
-    "NUMERIC": 12,
-    "SUBOPTIMAL": 13,
-    "INPROGRESS": 14,
-    "USER_OBJ_LIMIT": 15,
-    "WORK_LIMIT": 16,
-    "MEM_LIMIT": 17,
-    "LOCALLY_OPTIMAL": 18,
-    "LOCALLY_INFEASIBLE": 19,
+	"LOADED": 1,  # Model is loaded, but no solution information is available.
+	"OPTIMAL": 2,  # Model was solved to optimality (subject to tolerances), and an optimal solution is available.
+	"INFEASIBLE": 3,  # Model was proven to be infeasible.
+	"INF_OR_UNBD": 4,  # Model was proven to be either infeasible or unbounded.
+	"UNBOUNDED": 5,  # Model was proven to be unbounded; says nothing about feasibility.
+	"CUTOFF": 6,  # Optimal objective was proven worse than the Cutoff parameter value.
+	"ITERATION_LIMIT": 7,  # Terminated: simplex/barrier iterations exceeded IterationLimit/BarIterLimit.
+	"NODE_LIMIT": 8,  # Terminated: branch-and-cut nodes exceeded NodeLimit.
+	"TIME_LIMIT": 9,  # Terminated: time expended exceeded TimeLimit.
+	"SOLUTION_LIMIT": 10,  # Terminated: number of solutions found reached SolutionLimit.
+	"INTERRUPTED": 11,  # Optimization was terminated by the user.
+	"NUMERIC": 12,  # Terminated due to unrecoverable numerical difficulties.
+	"SUBOPTIMAL": 13,  # Suboptimal solution available; optimality tolerances not satisfied.
+	"INPROGRESS": 14,  # Asynchronous optimization run not yet complete.
+	"USER_OBJ_LIMIT": 15,  # User-specified objective limit reached.
+	"WORK_LIMIT": 16,  # Terminated: work expended exceeded WorkLimit.
+	"MEM_LIMIT": 17,  # Terminated: memory allocated exceeded SoftMemLimit.
+	"LOCALLY_OPTIMAL": 18,  # Solved to local optimality (preview feature).
+	"LOCALLY_INFEASIBLE": 19,  # Appears locally infeasible (preview feature).
 }
+
 MILP_STATUS_NAME = {code: name for name, code in MILP_STATUS.items()}
 
 
+# =========================
+# CORE FUNCTIONS
+# =========================
+
 def run_onnx(model_path, input_data):
+    """Run ONNX inference on a single input batch."""
+
+    # Create inference session.
     session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+
+    # Get input name.
     input_name = session.get_inputs()[0].name
+
+    # Ensure input is numpy float32.
     input_array = np.asarray(input_data, dtype=np.float32)
+
+    # Run inference.
     return session.run(None, {input_name: input_array})
 
 
 def parse_failed_labels(text):
+    """Parse the failed labels list from ERAN log output."""
+
     match = re.search(r"failed labels:\s*(.*)", text)
     if not match:
         return []
@@ -69,6 +91,8 @@ def parse_failed_labels(text):
 
 
 def parse_adversarial_examples(text):
+    """Parse the adversarial example payload from ERAN log output."""
+
     pattern = r"possible adversarial examples is:\s*(\[[^\]]*\])"
     match = re.search(pattern, text, re.DOTALL)
     if not match:
@@ -81,33 +105,45 @@ def parse_adversarial_examples(text):
 
 
 def parse_relaxed_example(text):
+    """Parse the best relaxed fractional example from ERAN log output."""
+
+    # Escape the parentheses and allow matches across multiple lines.
     pattern = r"Best RELAXED \(fractional\) values:\s*(\[.*?\])"
     match = re.search(pattern, text, re.DOTALL)
     if not match:
         return None
 
     try:
+        # Safely convert the string representation of the list into a real list.
         return ast.literal_eval(match.group(1))
     except (ValueError, SyntaxError):
         return None
 
 
 def parse_milp_statuses(text):
+    """Extract all MILP status codes emitted in the log."""
+
     return [int(x) for x in re.findall(r"MILP status is\s+(\d+)", text)]
 
 
 def format_milp_status(status_code):
+    """Map a numeric MILP status code to a human-readable label."""
+
     if status_code is None:
         return "UNKNOWN"
     return MILP_STATUS_NAME.get(status_code, f"UNKNOWN_{status_code}")
 
 
 def parse_return_value(text):
+    """Extract the final RETURN value from ERAN log output."""
+
     match = re.search(r"RETURN\s+(-?\d+)", text)
     return int(match.group(1)) if match else None
 
 
 def parse_label_results(text, failed_labels=None):
+    """Parse per-label verification outcomes from a detailed ERAN log."""
+
     failed_set = set(failed_labels or [])
     counter_pattern = re.compile(
         r"Counter is\s+\d+(?:\s+candidate label is\s+(\d+)\s+adv label is\s+(\d+)|\s+label is\s+(\d+))"
@@ -148,6 +184,8 @@ def parse_label_results(text, failed_labels=None):
 
 
 def build_candidate_last_statuses(label_results):
+    """Build a map from candidate label to its last recorded MILP status."""
+
     candidate_last_statuses = {}
     for result in label_results:
         candidate_label = result.get("candidate_label")
@@ -158,6 +196,8 @@ def build_candidate_last_statuses(label_results):
 
 
 def parse_log_details(text):
+    """Collect structured verification details from a raw ERAN log string."""
+
     failed_labels = parse_failed_labels(text)
     label_results = parse_label_results(text, failed_labels)
     statuses = parse_milp_statuses(text)
@@ -175,6 +215,8 @@ def parse_log_details(text):
 
 
 def plot_adv(example):
+    """Render a 28x28 adversarial example in grayscale."""
+
     adv_img = np.array(example).reshape(28, 28)
     plt.figure(figsize=(4, 4))
     plt.imshow(adv_img, cmap="gray")
@@ -182,6 +224,18 @@ def plot_adv(example):
 
 
 def verify_adv_example(example, label_img, failed_labels):
+    """Verify an adversarial example using the ONNX model.
+
+    Args:
+        example (list or np.ndarray): The adversarial example to verify.
+        label_img (int): The original label of the image.
+        failed_labels (list): Labels that failed during verification.
+
+    Returns:
+        bool: True if it is a real adversarial example, False otherwise.
+    """
+
+    # Reshape to the expected 1x1x28x28 input tensor.
     ex = np.array(example, dtype=np.float32).reshape(1, 1, 28, 28)
     predicted_class = np.argmax(run_onnx(str(NETNAME), ex)[0])
     print("Predicted class for adversarial example:", predicted_class)
@@ -204,6 +258,30 @@ def run_eran(
     middle_bound=0.5,
     bounds=None,
 ):
+    """Run ERAN and return structured verification details from the log.
+
+    Args:
+        input_box_path (str): Path to the input box file with pixel values in [0, 1].
+        domain (str): Verification domain such as `deepzono`, `refinezono`,
+            `deeppoly`, or `refinepoly`.
+        complete (bool): Whether to enable the complete verification flow.
+        timeout_complete (int): Timeout for complete verification.
+        use_milp (bool): Whether MILP refinement is enabled.
+        label (int): True label of the image being verified.
+        timeout_final_milp (int): Timeout for the final MILP stage.
+        adv_label (int): Specific adversarial label to target, or `-1` for all.
+        add_bool_constraints (bool): Whether to add boolean constraints.
+        use_refine_poly (bool): Whether to enable refinepoly-specific refinements.
+        middle_bound (float): Split point used by the underlying bounds logic.
+        bounds (list | None): Optional per-pixel bounds overrides.
+
+    Raises:
+        ValueError: If the log does not contain a RETURN value.
+
+    Returns:
+        dict: Structured details extracted from the ERAN run log.
+    """
+
     cmd = [
         PYTHON_BIN,
         ".",
@@ -278,17 +356,23 @@ def run_eran(
 
 
 def get_num_classes_for_image(img):
+    """Infer the number of output classes for a single image."""
+
     sample = np.array(img, dtype=np.float32).reshape(1, 1, 28, 28)
     return int(run_onnx(str(NETNAME), sample)[0].shape[-1])
 
 
 def build_candidate_adv_labels(label_img, adv_label, num_classes):
+    """List adversarial labels to evaluate for the current image."""
+
     if adv_label != -1:
         return [adv_label]
     return [idx for idx in range(num_classes) if idx != int(label_img)]
 
 
 def finalize_label_results(label_results, label_img, adv_label, num_classes, failed_labels, is_adversarial):
+    """Normalize per-label results and assign final verification outcomes."""
+
     normalized_results = []
     for result in label_results:
         normalized = dict(result)
@@ -356,8 +440,35 @@ def verify_image(
     adv_label=-1,
     return_details=False,
 ):
+    """Verify one image against the configured patch attack region.
+
+    This runs ERAN, optionally plots a returned adversarial example, and
+    validates any candidate example with the ONNX model.
+
+    Args:
+        img_index (int): Index of the image to verify.
+        pixels (np.ndarray): Array of image pixels.
+        labels (np.ndarray): Array of image labels.
+        timeout_milp (int, optional): Timeout for MILP verification.
+        with_plots (bool, optional): Whether to plot the adversarial example.
+        ul (float, optional): Upper limit for the patch pixel range.
+        add_bool_constraints (bool, optional): Whether to add boolean constraints.
+        use_refine_poly (bool, optional): Whether to use refinepoly refinement.
+        middle_bound (float, optional): Split point used in bound refinement.
+        bounds (list | None, optional): Optional per-pixel bounds overrides.
+        adv_label (int, optional): Specific adversarial label to target.
+        return_details (bool, optional): Whether to return the structured result.
+
+    Returns:
+        dict | tuple: Structured result when `return_details=True`, otherwise a
+        tuple containing elapsed time, status, failed labels, example, and the
+        adversarial flag.
+    """
+
     img = pixels[img_index].reshape(28, 28)
     label_img = int(labels[img_index])
+
+    # Patch size 11 finds an adversarial example for index 7.
     input_box_path = create_patch_input_config_file(img, x_box, y_box, size_box, label=label_img, ul=ul)
     run_details = run_eran(
         input_box_path=input_box_path,
@@ -438,20 +549,45 @@ def verify_image_with_sub_splits(
     use_refine_poly=True,
     middle_bound=0.5,
 ):
+    """Verify one image by splitting selected patch pixels into sub-ranges.
+
+    Args:
+        img_index (int): Index of the image to verify.
+        pixels (np.ndarray): Array of image pixels.
+        labels (np.ndarray): Array of image labels.
+        timeout_milp (int, optional): Timeout for MILP verification.
+        split_pixels_count (int, optional): Number of pixels to split.
+        is_random (bool, optional): Whether to randomly select split pixels.
+        split_pixels_list (list, optional): Specific patch-local pixel indices.
+        split_value (float, optional): Value used to split each selected pixel.
+        split_amounts (int, optional): Number of sub-splits per selected pixel.
+        ul (float, optional): Upper limit for the patch pixel range.
+        add_bool_constraints (bool, optional): Whether to add boolean constraints.
+        use_refine_poly (bool, optional): Whether to use refinepoly refinement.
+        middle_bound (float, optional): Split point used in bound refinement.
+
+    Returns:
+        tuple: Elapsed time, last MILP status, failed labels, example, and
+        whether the example is adversarial.
+    """
+
     img = pixels[img_index].reshape(28, 28)
     label_img = labels[img_index]
 
     if is_random:
+        # Select random pixels to split as indexes within the patch.
         split_pixels_list = random.sample(range(size_box * size_box), split_pixels_count)
     elif split_pixels_list is None:
         raise ValueError("split_pixels_list should not be defined if is_random is False")
 
+    # Convert patch-local indexes to image coordinates.
     split_pixels_list = [
         convert_index_of_patch_pixel_to_coordinates(index, x_box, y_box, size_box)
         for index in split_pixels_list
     ]
     print(f"Splitting on pixels: {split_pixels_list}")
 
+    # Range of values for each split pixel.
     split_pixels_ranges = [[[0, split_value], [split_value, 1]]] * split_pixels_count
     input_box_path = create_patch_input_config_file(
         img,

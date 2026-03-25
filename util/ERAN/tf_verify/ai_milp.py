@@ -50,10 +50,12 @@ def milp_callback(model, where):
         if obj_best < -0.01:
             model.terminate()
     if where == GRB.Callback.MIPSOL:
-        print(64*"-")
+        print(64 * "=")
+        print(64 * "=")
         print("Found a solution with objective ", model.cbGet(GRB.Callback.MIP_OBJBST))
         print(model.cbGetSolution(model.getVars()))
-        print(64*"-")
+        print(64 * "=")
+        print(64 * "=")
 
 def lp_callback(model, where):
     # pass
@@ -580,7 +582,7 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
     # model.setParam("MIPFocus", 1) # param for getting solution before timeout
     # model.setParam("NoRelHeurTime", 10)
     # model.setParam("Heuristics", 1)
-    # model.setParam("OutputFlag",0)
+    model.setParam("OutputFlag",0)
     model.setParam(GRB.Param.FeasibilityTol, 2e-5)
 
     milp_activation_layers = np.nonzero([l in ["ReLU", "Maxpool"] for l in nn.layertypes])[0]
@@ -633,7 +635,7 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
     else:
         if add_bool_constraints:
             print("Adding boolean constraints for input pixels")
-        print("bounds list ", config_param.bounds)
+        # print("bounds list ", config_param.bounds)
         bounds_config = config_param.bounds
         bounds_are_per_pixel = (
             isinstance(bounds_config, (list, tuple))
