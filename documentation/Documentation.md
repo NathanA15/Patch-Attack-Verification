@@ -77,3 +77,17 @@ Results:
 	- 31.49s for verifying Label 2 without split
 	- 25.83 for verifiying Label 2 after first split on 30 pixels
 	- 25.63 for verifiying Label 2 after second split on 30 pixels (same pixels to split)
+
+## Recursive timeout refinement flow
+
+The current implementation runs one full ERAN verification pass first and uses that pass only to identify which adversarial labels prove robust quickly, which are adversarial, and which labels timed out.
+
+For each timed-out label, the script starts a separate refinement loop:
+
+1. Take the relaxed example associated with that specific label from the ERAN log.
+2. Compute the gradient of the margin `z_correct - z_target` with respect to the input pixels.
+3. Restrict attention to the chosen patch and rank patch pixels by gradient magnitude.
+4. Select the top `k` patch pixels and split their current bounds into smaller intervals (by half).
+5. Rerun ERAN for that single adversarial label only, using the refined per-pixel bounds.
+6. If the label is now verified or adversarial, stop for that label.
+7. If the label still times out, repeat the same process until `max_depth` is reached.
