@@ -1,4 +1,31 @@
+import csv
+import time
+from datetime import datetime
+from pathlib import Path
+
 from gurobipy import GRB
+
+from config import CSV_DIR, LOG_DIR
+
+
+RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS = [
+    "Image Index",
+    "X patch",
+    "Y patch",
+    "Patch Size",
+    "Upper bound",
+    "Initial Timeout Labels",
+    "Finally Verified Labels",
+    "Adversarial Labels",
+    "Unresolved Labels",
+    "Total Run Time (s)",
+    "Max Depth Reached",
+    "Attempt Count",
+    "Status",
+    "Comment",
+    "Log paths",
+    "CSV path",
+]
 
 
 def dump_callback_codes():
@@ -41,6 +68,80 @@ def generate_initial_bounds(num_pixels, lb=0, ub=1):
     for i in range(num_pixels):
         bounds.append([[lb, ub]])
     return bounds
+
+
+def build_runs_csv_path(run_id=None):
+    """
+    Build the summary CSV path for recursive timeout refinement runs.
+    """
+    timestamp = run_id or time.strftime("%Y_%m_%d_%H_%M_%S")
+    return Path(CSV_DIR) / f"recursive_timeout_refinement_{timestamp}.csv"
+
+
+def build_run_log_dir(run_id=None):
+    """
+    Build the per-run log directory for recursive timeout refinement.
+    """
+    run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
+    daily_folder = LOG_DIR / datetime.now().strftime("%Y%m%d")
+    run_log_dir = daily_folder / run_id
+    run_log_dir.mkdir(parents=True, exist_ok=True)
+    return run_log_dir
+
+
+def fresh_log_file(run_log_dir, attempt_idx, adv_label):
+    """
+    Build a unique log file path for a single ERAN attempt.
+    """
+    label_tag = "all_labels" if adv_label == -1 else f"adv_label_{adv_label}"
+    return Path(run_log_dir) / f"{attempt_idx:03d}_{label_tag}_eran_run.log"
+
+
+def ensure_trailing_newline(path):
+    """
+    Ensure an appended CSV continues on a new line.
+    """
+    path = Path(path)
+    if not path.exists():
+        return
+
+    with path.open("rb") as handle:
+        handle.seek(0, 2)
+        if handle.tell() == 0:
+            return
+        handle.seek(-1, 2)
+        if handle.read(1) != b"\n":
+            with path.open("ab") as out_handle:
+                out_handle.write(b"\n")
+
+
+def append_run_row(csv_path, row, save_csv=True):
+    """
+    Append one summary row for a recursive timeout refinement run.
+    """
+    if not save_csv:
+        return
+
+    csv_path = Path(csv_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    file_exists = csv_path.exists()
+    if file_exists:
+        ensure_trailing_newline(csv_path)
+
+    with csv_path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        if not file_exists:
+            writer.writerow(RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS)
+        writer.writerow([row.get(col, "") for col in RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS])
+
+
+def elapsed_seconds(elapsed_time):
+    """
+    Return elapsed time as seconds from either timedelta or numeric input.
+    """
+    if hasattr(elapsed_time, "total_seconds"):
+        return float(elapsed_time.total_seconds())
+    return float(elapsed_time)
 
 
 def subdivide_bounds_at_indices(bounds_list_per_pixel, indices_to_split):

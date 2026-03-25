@@ -2,6 +2,7 @@ import ast
 import random
 import re
 import subprocess
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
@@ -43,6 +44,8 @@ MILP_STATUS = {
 }
 
 MILP_STATUS_NAME = {code: name for name, code in MILP_STATUS.items()}
+
+_PYTORCH_MODEL = None
 
 
 # =========================
@@ -529,6 +532,454 @@ def verify_image(
         result["example"],
         result["is_adversarial"],
     )
+
+
+def get_pytorch_model():
+    """Load and cache the verification network as a PyTorch model."""
+
+    global _PYTORCH_MODEL
+
+    if _PYTORCH_MODEL is None:
+        import onnx
+        from onnx2pytorch import ConvertModel
+
+        onnx_model = onnx.load(str(NETNAME))
+        _PYTORCH_MODEL = ConvertModel(onnx_model)
+        _PYTORCH_MODEL.eval()
+
+    return _PYTORCH_MODEL
+
+
+def get_pixel_influence(model_source, input_image, correct_class_idx, target_class_idx):
+    """Compute absolute input gradients for the class margin."""
+
+    import torch
+
+    if not torch.is_tensor(input_image):
+        input_tensor = torch.from_numpy(np.asarray(input_image)).float()
+    else:
+        input_tensor = input_image.clone().float()
+
+    if input_tensor.numel() == 784:
+        input_tensor = input_tensor.view(1, 1, 28, 28)
+    elif tuple(input_tensor.shape) == (28, 28):
+        input_tensor = input_tensor.unsqueeze(0).unsqueeze(0)
+    elif tuple(input_tensor.shape) == (1, 28, 28):
+        input_tensor = input_tensor.unsqueeze(0)
+
+    if tuple(input_tensor.shape) != (1, 1, 28, 28):
+        raise ValueError(f"Input shape mismatch: {tuple(input_tensor.shape)}")
+
+    input_tensor.requires_grad_(True)
+    pytorch_model = model_source
+    pytorch_model.zero_grad()
+    outputs = pytorch_model(input_tensor)
+    # Compute the margin between the target class and the correct class.
+    # we want to maximize the target - meaning reinforcing the adversarial class, therefore the most important pixels will be the pixels whose gradients maximize the loss, therefore the pixels with biggest derivative.
+    margin = outputs[0, target_class_idx] - outputs[0, correct_class_idx]
+    margin.backward()
+    return input_tensor.grad.detach()
+
+
+def get_top_k_pixels_in_patch(
+    influence_map,
+    k=30,
+    patch_x=0,
+    patch_y=0,
+    patch_size=10,
+    img_w=28,
+    img_h=28,
+):
+    """Select the most influential flattened pixel indices within the patch."""
+
+    grad_2d = influence_map.view(img_h, img_w)
+    candidates = []
+
+    y_start = max(0, patch_y)
+    y_end = min(img_h, patch_y + patch_size)
+    x_start = max(0, patch_x)
+    x_end = min(img_w, patch_x + patch_size)
+
+    for row in range(y_start, y_end):
+        for col in range(x_start, x_end):
+            candidates.append((grad_2d[row, col].item(), row * img_w + col))
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    top_k = candidates[:k]
+    return [item[1] for item in top_k]
+
+
+def choose_split_pixels(relaxed_example, label_img, adv_label, patch_x, patch_y, patch_size, top_k):
+    """Choose the patch pixels to split next using gradient magnitude."""
+
+    if relaxed_example is None:
+        raise ValueError(f"Cannot refine label {adv_label}: relaxed example missing from log")
+
+    grads = get_pixel_influence(
+        model_source=get_pytorch_model(),
+        input_image=np.array(relaxed_example, dtype=np.float32).reshape(1, 1, 28, 28),
+        correct_class_idx=label_img,
+        target_class_idx=adv_label,
+    )
+    return get_top_k_pixels_in_patch(
+        grads,
+        k=top_k,
+        patch_x=patch_x,
+        patch_y=patch_y,
+        patch_size=patch_size,
+    )
+
+
+def get_single_label_result(run_result, adv_label):
+    """Return the per-label result for one adversarial label."""
+
+    for label_result in run_result["label_results"]:
+        if int(label_result["adv_label"]) == int(adv_label):
+            return label_result
+    raise ValueError(f"Did not find label result for adv_label={adv_label}")
+
+
+def summarize_status(label_outcomes):
+    """Summarize recursive timeout refinement outcomes into one status label."""
+
+    adversarial_labels = sorted(
+        label for label, outcome in label_outcomes.items() if outcome["final_outcome"] == "adversarial"
+    )
+    unresolved_labels = sorted(
+        label
+        for label, outcome in label_outcomes.items()
+        if outcome["final_outcome"] in {"max_depth_timeout", "error", "failed"}
+    )
+    if adversarial_labels:
+        return "Adversarial"
+    if unresolved_labels:
+        return "MaxDepthTimeout"
+    return "Verified"
+
+
+def resolve_timed_out_labels(initial_results, base_bounds, max_depth, choose_pixels_fn, rerun_label_fn):
+    """Rerun timed-out labels with progressively refined bounds."""
+
+    label_outcomes = {}
+    rerun_attempts = 0
+    rerun_runtime = 0.0
+    max_depth_reached = 0
+    log_paths = []
+
+    for idx, initial_result in enumerate(initial_results):
+        adv_label = int(initial_result["adv_label"])
+        if not initial_result["timed_out"]:
+            label_outcomes[adv_label] = {
+                "final_outcome": initial_result["final_outcome"],
+                "depth": 0,
+                "runtime_seconds": 0.0,
+                "log_paths": [],
+                "last_status": initial_result["milp_status"],
+            }
+            if initial_result["final_outcome"] == "adversarial":
+                skipped_labels = [
+                    int(result["adv_label"])
+                    for result in initial_results[idx + 1 :]
+                    if result["timed_out"]
+                ]
+                return {
+                    "label_outcomes": label_outcomes,
+                    "rerun_attempts": rerun_attempts,
+                    "rerun_runtime": rerun_runtime,
+                    "max_depth_reached": max_depth_reached,
+                    "log_paths": log_paths,
+                    "stopped_early": True,
+                    "adversarial_label": adv_label,
+                    "skipped_labels": skipped_labels,
+                }
+            continue
+
+        state_bounds = deepcopy(base_bounds)
+        current_result = dict(initial_result)
+        label_runtime = 0.0
+        label_logs = []
+        depth = 0
+
+        while current_result["timed_out"] and depth < max_depth:
+            split_indices = choose_pixels_fn(current_result["relaxed_example"], adv_label)
+            state_bounds = subdivide_bounds_at_indices(state_bounds, split_indices)
+            depth += 1
+            rerun_attempts += 1
+
+            rerun_result = rerun_label_fn(adv_label, state_bounds)
+            rerun_seconds = elapsed_seconds(rerun_result["elapsed_time"])
+            rerun_runtime += rerun_seconds
+            label_runtime += rerun_seconds
+            label_logs.append(str(rerun_result["log_path"]))
+            log_paths.append(str(rerun_result["log_path"]))
+
+            current_result = get_single_label_result(rerun_result, adv_label)
+            max_depth_reached = max(max_depth_reached, depth)
+
+            if current_result["final_outcome"] == "adversarial":
+                break
+            if not current_result["timed_out"]:
+                break
+
+        final_outcome = current_result["final_outcome"]
+        if current_result["timed_out"] and depth >= max_depth:
+            final_outcome = "max_depth_timeout"
+
+        label_outcomes[adv_label] = {
+            "final_outcome": final_outcome,
+            "depth": depth,
+            "runtime_seconds": label_runtime,
+            "log_paths": label_logs,
+            "last_status": current_result["milp_status"],
+        }
+
+        if final_outcome == "adversarial":
+            skipped_labels = [
+                int(result["adv_label"])
+                for result in initial_results[idx + 1 :]
+                if result["timed_out"]
+            ]
+            return {
+                "label_outcomes": label_outcomes,
+                "rerun_attempts": rerun_attempts,
+                "rerun_runtime": rerun_runtime,
+                "max_depth_reached": max_depth_reached,
+                "log_paths": log_paths,
+                "stopped_early": True,
+                "adversarial_label": adv_label,
+                "skipped_labels": skipped_labels,
+            }
+
+    return {
+        "label_outcomes": label_outcomes,
+        "rerun_attempts": rerun_attempts,
+        "rerun_runtime": rerun_runtime,
+        "max_depth_reached": max_depth_reached,
+        "log_paths": log_paths,
+        "stopped_early": False,
+        "adversarial_label": None,
+        "skipped_labels": [],
+    }
+
+
+def verify_image_with_recursive_timeout_refinement(
+    img_index,
+    pixels,
+    labels,
+    x_box,
+    y_box,
+    size_box,
+    timeout_milp=27,
+    max_depth=2,
+    top_k=30,
+    ul=0.65,
+    add_bool_constraints=True,
+    use_refine_poly=False,
+    middle_bound=0.5,
+    with_plots=False,
+    run_id=None,
+    runs_csv_path=None,
+    run_log_dir=None,
+    save_csv=True,
+):
+    """Verify one image and recursively refine timed-out labels with gradient splits.
+
+    Args:
+        img_index (int): Index of the image to verify.
+        pixels (np.ndarray): Array of image pixels.
+        labels (np.ndarray): Array of image labels.
+        x_box (int): Patch top-left x (column).
+        y_box (int): Patch top-left y (row).
+        size_box (int): Patch size.
+        timeout_milp (int | float, optional): MILP timeout per ERAN call.
+        max_depth (int, optional): Maximum number of recursive split reruns.
+        top_k (int, optional): Number of top-gradient patch pixels to split each rerun.
+        ul (float, optional): Upper bound for patch pixels.
+        add_bool_constraints (bool, optional): Whether to add boolean constraints.
+        use_refine_poly (bool, optional): Whether to enable refinepoly refinements.
+        middle_bound (float, optional): Split point used by ERAN's bounds logic.
+        with_plots (bool, optional): Whether to plot returned adversarial examples.
+        run_id (str | None, optional): Run identifier used for logs and CSV naming.
+        runs_csv_path (str | Path | None, optional): Optional summary CSV path override.
+        run_log_dir (str | Path | None, optional): Optional per-run log directory override.
+        save_csv (bool, optional): Whether to append the summary row to CSV.
+
+    Returns:
+        dict: Summary of the recursive timeout refinement run.
+    """
+
+    run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
+    runs_csv_path = Path(runs_csv_path) if runs_csv_path is not None else build_runs_csv_path(run_id)
+    if run_log_dir is None:
+        run_log_dir = build_run_log_dir(run_id)
+    else:
+        run_log_dir = Path(run_log_dir)
+        run_log_dir.mkdir(parents=True, exist_ok=True)
+
+    label_img = int(labels[img_index])
+    base_bounds = generate_initial_bounds(int(pixels[img_index].size), 0, ul)
+
+    print(
+        f"Starting recursive verification for image {img_index} "
+        f"label={label_img} patch=({x_box}, {y_box}) size={size_box}"
+    )
+    print(
+        f"upper_bound={ul} timeout_milp={timeout_milp} "
+        f"max_depth={max_depth} top_k={top_k}"
+    )
+    if save_csv:
+        print(f"Summary CSV: {runs_csv_path}")
+    print(f"Run log directory: {run_log_dir}")
+    print("-" * 80)
+
+    total_runtime = 0.0
+    attempt_count = 0
+    all_log_paths = []
+    max_depth_reached = 0
+
+    def run_for_label(adv_label, bounds):
+        nonlocal total_runtime, attempt_count, all_log_paths
+        global LOG_FILE
+
+        log_file = fresh_log_file(run_log_dir, attempt_count, adv_label)
+        previous_log_file = LOG_FILE
+        LOG_FILE = log_file
+        attempt_count += 1
+
+        try:
+            result = verify_image(
+                img_index=img_index,
+                pixels=pixels,
+                labels=labels,
+                x_box=x_box,
+                y_box=y_box,
+                size_box=size_box,
+                timeout_milp=timeout_milp,
+                with_plots=with_plots,
+                ul=ul,
+                add_bool_constraints=add_bool_constraints,
+                use_refine_poly=use_refine_poly,
+                middle_bound=middle_bound,
+                bounds=bounds,
+                adv_label=adv_label,
+                return_details=True,
+            )
+        finally:
+            LOG_FILE = previous_log_file
+
+        run_seconds = elapsed_seconds(result["elapsed_time"])
+        total_runtime += run_seconds
+        all_log_paths.append(str(result["log_path"]))
+        return result
+
+    initial_result = run_for_label(-1, base_bounds)
+    initial_label_results = initial_result["label_results"]
+    initial_timeout_labels = sorted(
+        int(label_result["adv_label"])
+        for label_result in initial_label_results
+        if label_result["timed_out"]
+    )
+
+    print(f"Initial timeout labels: {initial_timeout_labels}")
+
+    resolved = resolve_timed_out_labels(
+        initial_results=initial_label_results,
+        base_bounds=base_bounds,
+        max_depth=max_depth,
+        choose_pixels_fn=lambda relaxed_example, adv_label: choose_split_pixels(
+            relaxed_example,
+            label_img,
+            adv_label,
+            x_box,
+            y_box,
+            size_box,
+            top_k,
+        ),
+        rerun_label_fn=run_for_label,
+    )
+
+    max_depth_reached = max(max_depth_reached, resolved["max_depth_reached"])
+    all_log_paths.extend(resolved["log_paths"])
+    label_outcomes = resolved["label_outcomes"]
+    skipped_labels = resolved["skipped_labels"]
+
+    finally_verified_labels = sorted(
+        label for label, outcome in label_outcomes.items() if outcome["final_outcome"] == "verified"
+    )
+    adversarial_labels = sorted(
+        label for label, outcome in label_outcomes.items() if outcome["final_outcome"] == "adversarial"
+    )
+    unresolved_labels = sorted(
+        label
+        for label, outcome in label_outcomes.items()
+        if outcome["final_outcome"] in {"max_depth_timeout", "error", "failed"}
+    )
+
+    overall_status = summarize_status(label_outcomes)
+    comment = (
+        f"Recursive timeout refinement finished. "
+        f"timed_out_initial={initial_timeout_labels} "
+        f"rerun_attempts={resolved['rerun_attempts']} "
+        f"stopped_early={resolved['stopped_early']} "
+        f"adversarial_label={resolved['adversarial_label']} "
+        f"skipped_labels={skipped_labels}"
+    )
+
+    row = {
+        "Image Index": img_index,
+        "X patch": x_box,
+        "Y patch": y_box,
+        "Patch Size": size_box,
+        "Upper bound": ul,
+        "Initial Timeout Labels": str(initial_timeout_labels),
+        "Finally Verified Labels": str(finally_verified_labels),
+        "Adversarial Labels": str(adversarial_labels),
+        "Unresolved Labels": str(unresolved_labels),
+        "Total Run Time (s)": int(round(total_runtime)),
+        "Max Depth Reached": max_depth_reached,
+        "Attempt Count": attempt_count,
+        "Status": overall_status,
+        "Comment": comment,
+        "Log paths": ";".join(all_log_paths),
+        "CSV path": "" if not save_csv else str(runs_csv_path),
+    }
+    append_run_row(runs_csv_path, row, save_csv=save_csv)
+
+    print("\n" + "=" * 80)
+    print(f"Status: {overall_status}")
+    print(f"Initial timeout labels: {initial_timeout_labels}")
+    print(f"Finally verified labels: {finally_verified_labels}")
+    print(f"Adversarial labels: {adversarial_labels}")
+    print(f"Unresolved labels: {unresolved_labels}")
+    if resolved["stopped_early"]:
+        print(
+            f"Stopped early after proving not robust against label {resolved['adversarial_label']} "
+            f"(skipped timed-out labels: {skipped_labels})"
+        )
+    print(f"Total runtime: {total_runtime:.2f}s across {attempt_count} ERAN runs")
+    print("=" * 80)
+
+    return {
+        "image_index": img_index,
+        "label": label_img,
+        "initial_timeout_labels": initial_timeout_labels,
+        "finally_verified_labels": finally_verified_labels,
+        "adversarial_labels": adversarial_labels,
+        "unresolved_labels": unresolved_labels,
+        "total_runtime_seconds": total_runtime,
+        "max_depth_reached": max_depth_reached,
+        "attempt_count": attempt_count,
+        "status": overall_status,
+        "comment": comment,
+        "log_paths": all_log_paths,
+        "csv_path": "" if not save_csv else str(runs_csv_path),
+        "run_log_dir": str(run_log_dir),
+        "label_outcomes": label_outcomes,
+        "stopped_early": resolved["stopped_early"],
+        "adversarial_label": resolved["adversarial_label"],
+        "skipped_labels": skipped_labels,
+        "initial_result": initial_result,
+    }
 
 
 def verify_image_with_sub_splits(
