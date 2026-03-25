@@ -1198,7 +1198,7 @@ elif config.input_box is not None:
         normalize(specUB, means, stds, dataset)
         print("adv_label ", config.adv_label)
         hold, nn, nlb, nub, failed_labels, adversarial_ex = eran.analyze_box(specLB, specUB, domain, config.timeout_lp, config.timeout_milp, config.use_default_heuristic, constraints, complete=config.complete, timeout_final_milp=config.timeout_final_milp, label=config.label, prop=config.adv_label,
-        add_bool_constraints=config.add_bool_constraints, use_refine_poly=config.use_refine_poly, middle_bound=config.middle_bound, config_param=config) # nathan added use of complete flag, timeout_final_milp, added label and adv_labels
+        terminate_on_failure=False, add_bool_constraints=config.add_bool_constraints, use_refine_poly=config.use_refine_poly, middle_bound=config.middle_bound, config_param=config) # nathan added use of complete flag, timeout_final_milp, added label and adv_labels
 
         # if adversarial_ex is not None:
         #     denormalize(adversarial_ex, means, stds, dataset) #shuey added

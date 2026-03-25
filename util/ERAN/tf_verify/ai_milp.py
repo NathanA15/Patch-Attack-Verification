@@ -49,6 +49,11 @@ def milp_callback(model, where):
             model.terminate()
         if obj_best < -0.01:
             model.terminate()
+    if where == GRB.Callback.MIPSOL:
+        print(64*"-")
+        print("Found a solution with objective ", model.cbGet(GRB.Callback.MIP_OBJBST))
+        print(model.cbGetSolution(model.getVars()))
+        print(64*"-")
 
 def lp_callback(model, where):
     # pass
@@ -573,7 +578,8 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
     model = Model("milp")
     model.Params.Threads = 16 # thread counts which represent CPU cores
     # model.setParam("MIPFocus", 1) # param for getting solution before timeout
-    # model.setParam("Heuristics", 1) 
+    # model.setParam("NoRelHeurTime", 10)
+    # model.setParam("Heuristics", 1)
     # model.setParam("OutputFlag",0)
     model.setParam(GRB.Param.FeasibilityTol, 2e-5)
 

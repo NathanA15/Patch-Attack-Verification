@@ -288,7 +288,9 @@ class Analyzer:
 
             for label in candidate_labels:
                 flag = True
+                stop_on_real_adversarial = False
                 for adv_label in adv_labels:
+                    current_failed = False
                     time_start = time.time()
                     if self.domain == 'deepzono' or self.domain == 'refinezono':
                         if label == adv_label:
@@ -296,6 +298,7 @@ class Analyzer:
                         elif self.is_greater(self.man, element, label, adv_label): #TODO nathan - changed to false to disable deepzono fast check- this is is_greater
                             continue
                         else:
+                            current_failed = True
                             flag = False
                             label_failed.append(adv_label)
                             if terminate_on_failure:
@@ -311,76 +314,75 @@ class Analyzer:
                             if(self.domain=='refinepoly'): # nathan - goes here full milp only with refinepoly 
                                 obj = LinExpr()
                                 obj += 1 * var_list[counter + label]
-                                print("Counter is", counter, "label is", adv_label) # Nathan - debug
+                                print("Counter is", counter, "candidate label is", label, "adv label is", adv_label) # Nathan - debug
                                 obj += -1 * var_list[counter + adv_label]
                                 model.setObjective(obj, GRB.MINIMIZE)
                                 if self.complete: # Nathan - complete == True
                                     print("Nathan NumIntVars:", model.NumIntVars, "NumBinVars:", model.NumBinVars) # Nathan - because this prints 0 0 then it is not milp, but pure lp
 
-                                    
                                     model.optimize(milp_callback) # Nathan - this does the work of milp
 
                                     print("MILP status is ", model.Status) #Shuey Added
                                     print("Solcount is: ", model.solcount) #Shuey Added
 
-                                    if model.Status == 9 and model.SolCount == 0: # time limit reached
+                                    obj_bound = model.objbound if hasattr(model, "objbound") else None
+
+                                    if model.Status in [9, 11] and model.SolCount == 0 and (
+                                        obj_bound is None or obj_bound <= 0
+                                    ):
                                         print("Solcount: ", model.SolCount)
+                                        print("No solution found, running relaxed model")
                                         relaxed_model = model.relax()
                                         relaxed_model.optimize()
                                         relaxed_vals = []
                                         for v in var_list[:len(self.nn.specLB)]:
-                                            # Find the corresponding variable in the relaxed model
                                             relaxed_var = relaxed_model.getVarByName(v.VarName)
                                             if relaxed_var:
                                                 relaxed_vals.append(relaxed_var.X)
                                             else:
                                                 relaxed_vals.append(0) # Fallback if var not found
-                                        
+
                                         x_values = relaxed_vals
                                         print("Best RELAXED (fractional) values:", x_values)
 
-                                        
-                                    elif model.Status == 9 and model.SolCount > 0:
-                                        # print("Timeout reached during MILP solve")
+                                    elif model.Status in [9, 11] and model.SolCount > 0:
                                         vars = model.getVars()
                                         print("vars: ", vars)
                                         solution = {v.VarName: v.x for v in model.getVars()}
                                         print("Extracted solution at timeout\n")
                                         print(solution)
                                         x = model.getAttr("x", var_list[:len(self.nn.specLB)])
-                                        print("x is \n", x) 
-
+                                        print("x is \n", x)
 
                                     try:
                                         print("MILP objbound is ", model.objbound) #Shuey Added
                                     except:
                                         print(hasattr(model, "objbound")) #Shuey Added
 
-                                    if not hasattr(model,"objbound") or model.objbound <= 0: # this means that adversarial example found: Sl -Sadv <=0 tocheck
+                                    if model.solcount > 0 and (obj_bound is None or obj_bound <= 0): # concrete adversarial witness found
+                                        current_failed = True
                                         flag = False
-                                        if self.label != -1:
-                                            label_failed.append(adv_label)
-                                        
-                                        if model.solcount > 0: # means adversarial example found
-                                            # Pull input vars directly so bool vars don't shift indices.
-                                            x = model.getAttr("x", var_list[:len(self.nn.specLB)])
+                                        stop_on_real_adversarial = True
+                                        x = model.getAttr("x", var_list[:len(self.nn.specLB)])
 
                                         print("adv found against adv_label ", adv_label)
-                                        
+
                                         if terminate_on_failure:
                                             print("Terminated on failure") #Shuey Added
                                             print("Time taken and terminate on failure:", time.time() - time_start)
                                             break
                                     else:
-                                        if not hasattr(model,"objbound") or model.objbound > 0: # this means no adversarial example found: Sl - Sadv >0 tocheck
+                                        if obj_bound is not None and obj_bound > 0: # proved robust for this label
                                             print("MILP VERIFIED SUCCESSFULLY AGAINST LABEL ", adv_label)
                                             print("Time taken to successfully verify:", time.time() - time_start)
+                                        elif model.solcount == 0:
+                                            current_failed = True
+                                            flag = False
+                                            print("No concrete adversarial example found against adv_label ", adv_label)
+                                            print("MILP ended without a witness; keeping this label unresolved")
 
                                 else:
                                     model.optimize(lp_callback)
-                                    # model.optimize()
-                                    # if model.Status == 11:
-                                    #     model.optimize() #very rarely lp_callback seems to leave model in interrupted state
 
                                     try:
                                         print(
@@ -390,7 +392,6 @@ class Analyzer:
                                             f"Model status: {model.Status}, Objval retrival failed, Final solve time: {model.Runtime:.3f}")
 
                                     if model.Status == 6 or (model.Status == 2 and model.objval > 0):
-                                        # Cutoff active, or optimal with positive objective => sound against adv_label
                                         pass
                                     elif self.partial_milp != 0:
                                         obj = LinExpr()
@@ -410,27 +411,36 @@ class Analyzer:
                                         elif model_partial_milp.Status not in [2,9,11]:
                                             print("Partial milp model was not successful status is", model_partial_milp.Status)
                                             model_partial_milp.write("final.mps")
+                                            current_failed = True
                                             flag = False
                                         else:
+                                            current_failed = True
                                             flag = False
                                     elif model.Status != 2:
                                         print("Model was not successful status is",
                                               model.Status)
                                         model.write("final.mps")
+                                        current_failed = True
                                         flag = False
                                     else:
+                                        current_failed = True
                                         flag = False
                                     if flag and model.Status==2 and model.objval < 0:
                                         if model.objval != math.inf:
                                             x = model.getAttr("x", var_list[:len(self.nn.specLB)])
 
                             else:
+                                current_failed = True
                                 flag = False
-                    if not flag:
+                    if current_failed:
+                        if adv_label not in label_failed:
+                            label_failed.append(adv_label)
+                        if stop_on_real_adversarial:
+                            break
                         if terminate_on_failure:
                             break
-                        elif self.label != -1:
-                            label_failed.append(adv_label)
+                if stop_on_real_adversarial:
+                    break
                 if flag:
                     dominant_class = label
                     break
