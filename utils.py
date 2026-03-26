@@ -14,10 +14,12 @@ RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS = [
     "Y patch",
     "Patch Size",
     "Upper bound",
+    "Timeout MILP (s)",
     "Initial Timeout Labels",
     "Finally Verified Labels",
     "Adversarial Labels",
     "Unresolved Labels",
+    "ERAN Run Times",
     "Total Run Time (s)",
     "Max Depth Reached",
     "Attempt Count",
@@ -138,6 +140,14 @@ def append_run_row(csv_path, row, save_csv=True):
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     file_exists = csv_path.exists()
     if file_exists:
+        with csv_path.open("r", newline="", encoding="utf-8") as handle:
+            reader = csv.reader(handle)
+            existing_header = next(reader, [])
+        if existing_header and existing_header != RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS:
+            raise ValueError(
+                f"Existing CSV header at {csv_path} does not match the current recursive timeout "
+                "refinement schema. Use a new --csv-path or migrate the existing CSV first."
+            )
         ensure_trailing_newline(csv_path)
 
     with csv_path.open("a", newline="", encoding="utf-8") as handle:

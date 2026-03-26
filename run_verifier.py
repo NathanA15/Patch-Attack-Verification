@@ -853,10 +853,11 @@ def verify_image_with_recursive_timeout_refinement(
     total_runtime = 0.0
     attempt_count = 0
     all_log_paths = []
+    all_attempt_elapsed_times = []
     max_depth_reached = 0
 
     def run_for_label(adv_label, bounds):
-        nonlocal total_runtime, attempt_count, all_log_paths
+        nonlocal total_runtime, attempt_count, all_log_paths, all_attempt_elapsed_times
         global LOG_FILE
 
         log_file = fresh_log_file(run_log_dir, attempt_count, adv_label)
@@ -887,6 +888,7 @@ def verify_image_with_recursive_timeout_refinement(
 
         run_seconds = elapsed_seconds(result["elapsed_time"])
         total_runtime += run_seconds
+        all_attempt_elapsed_times.append(str(result["elapsed_time"]))
         all_log_paths.append(str(result["log_path"]))
         return result
 
@@ -917,7 +919,6 @@ def verify_image_with_recursive_timeout_refinement(
     )
 
     max_depth_reached = max(max_depth_reached, resolved["max_depth_reached"])
-    all_log_paths.extend(resolved["log_paths"])
     label_outcomes = resolved["label_outcomes"]
     skipped_labels = resolved["skipped_labels"]
 
@@ -949,11 +950,13 @@ def verify_image_with_recursive_timeout_refinement(
         "Y patch": y_box,
         "Patch Size": size_box,
         "Upper bound": ul,
+        "Timeout MILP (s)": timeout_milp,
         "Initial Timeout Labels": str(initial_timeout_labels),
         "Finally Verified Labels": str(finally_verified_labels),
         "Adversarial Labels": str(adversarial_labels),
         "Unresolved Labels": str(unresolved_labels),
-        "Total Run Time (s)": int(round(total_runtime)),
+        "ERAN Run Times": str(all_attempt_elapsed_times),
+        "Total Run Time (s)": round(total_runtime, 6),
         "Max Depth Reached": max_depth_reached,
         "Attempt Count": attempt_count,
         "Status": overall_status,
@@ -980,10 +983,13 @@ def verify_image_with_recursive_timeout_refinement(
     return {
         "image_index": img_index,
         "label": label_img,
+        "upper_bound": ul,
         "initial_timeout_labels": initial_timeout_labels,
         "finally_verified_labels": finally_verified_labels,
         "adversarial_labels": adversarial_labels,
         "unresolved_labels": unresolved_labels,
+        "timeout_milp": timeout_milp,
+        "eran_run_times": list(all_attempt_elapsed_times),
         "total_runtime_seconds": total_runtime,
         "max_depth_reached": max_depth_reached,
         "attempt_count": attempt_count,
