@@ -78,6 +78,18 @@ def build_runs_csv_path(run_id=None):
     return Path(CSV_DIR) / f"recursive_timeout_refinement_{timestamp}.csv"
 
 
+def resolve_runs_csv_path(csv_path=None, run_id=None):
+    """
+    Resolve the summary CSV path for recursive timeout refinement runs.
+
+    If ``csv_path`` is provided, it is reused as-is so multiple runs can append
+    to the same CSV. Otherwise a timestamped per-run CSV path is generated.
+    """
+    if csv_path is not None:
+        return Path(csv_path)
+    return build_runs_csv_path(run_id)
+
+
 def build_run_log_dir(run_id=None):
     """
     Build the per-run log directory for recursive timeout refinement.

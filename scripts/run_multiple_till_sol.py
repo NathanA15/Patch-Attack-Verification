@@ -27,6 +27,7 @@ DEFAULT_TOP_K = 30
 DEFAULT_ADD_BOOL_CONSTRAINTS = True
 DEFAULT_USE_REFINE_POLY = False
 SAVE_CSV = True
+DEFAULT_CSV_PATH = None
 
 
 def parse_args():
@@ -39,6 +40,15 @@ def parse_args():
     parser.add_argument("--timeout-milp", type=float, default=DEFAULT_TIMEOUT_MILP)
     parser.add_argument("--max-depth", type=int, default=DEFAULT_MAX_DEPTH)
     parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
+    parser.add_argument(
+        "--csv-path",
+        type=Path,
+        default=DEFAULT_CSV_PATH,
+        help=(
+            "Optional summary CSV path. If the file already exists, this run is "
+            "appended to it; otherwise it is created."
+        ),
+    )
     parser.add_argument(
         "--add-bool-constraints",
         dest="add_bool_constraints",
@@ -86,6 +96,7 @@ def main():
         add_bool_constraints=args.add_bool_constraints,
         use_refine_poly=args.use_refine_poly,
         run_id=run_id,
+        runs_csv_path=args.csv_path,
         save_csv=SAVE_CSV,
     )
 

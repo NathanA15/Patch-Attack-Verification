@@ -827,7 +827,7 @@ def verify_image_with_recursive_timeout_refinement(
     """
 
     run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
-    runs_csv_path = Path(runs_csv_path) if runs_csv_path is not None else build_runs_csv_path(run_id)
+    runs_csv_path = resolve_runs_csv_path(runs_csv_path, run_id)
     if run_log_dir is None:
         run_log_dir = build_run_log_dir(run_id)
     else:
