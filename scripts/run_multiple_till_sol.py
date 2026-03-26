@@ -3,7 +3,6 @@ Batch runner for recursive MNIST patch verification across upper bounds
 and timeout retries.
 """
 
-import argparse
 from datetime import datetime
 from pathlib import Path
 import sys
@@ -18,30 +17,26 @@ import run_verifier
 from config import MNIST_DATA_PATH
 from utils import resolve_runs_csv_path
 
-DEFAULT_IMAGE_INDEX = 2
-DEFAULT_PATCH_SIZE = 10
-DEFAULT_PATCH_X = 0
-DEFAULT_PATCH_Y = 0
-DEFAULT_UPPER_BOUND = 0.65
-DEFAULT_UPPER_BOUNDS = [0.65, 0.70, 0.75, 0.80]
-DEFAULT_TIMEOUT_MILP = 27
-DEFAULT_TIMEOUT_MILPS = [DEFAULT_TIMEOUT_MILP]
-DEFAULT_MAX_DEPTH = 4
-DEFAULT_TOP_K = 30
-DEFAULT_ADD_BOOL_CONSTRAINTS = True
-DEFAULT_USE_REFINE_POLY = False
+
+# Edit these globals to define what the script will run.
+IMAGE_INDEX = 2
+PATCH_X = 0
+PATCH_Y = 0
+PATCH_SIZE = 10
+MAX_DEPTH = 4
+TOP_K = 30
+ADD_BOOL_CONSTRAINTS = True
+USE_REFINE_POLY = False
 SAVE_CSV = True
-DEFAULT_CSV_PATH = None
+CSV_PATH = None
 
-
-def parse_float_sequence(values):
-    parsed_values = []
-    for value in values or []:
-        for chunk in str(value).split(","):
-            chunk = chunk.strip()
-            if chunk:
-                parsed_values.append(float(chunk))
-    return parsed_values
+# One entry per upper bound. For each upper bound, the timeout list is tried
+# in order until that bound resolves or the list is exhausted.
+RUN_SCHEDULE = [
+    {"upper_bound": 0.70, "timeout_milps": [15, 30, 60, 120, 200, 270, 450]},
+    {"upper_bound": 0.75, "timeout_milps": [200, 600, 1200, 3000, 6500]},
+    {"upper_bound": 0.80, "timeout_milps": [600,1000,5000,10000,15000,30000]},
+]
 
 
 def dedupe_preserving_order(values):
@@ -55,26 +50,34 @@ def dedupe_preserving_order(values):
     return deduped
 
 
-def resolve_upper_bounds(args):
-    if args.upper_bounds:
-        parsed_values = dedupe_preserving_order(parse_float_sequence(args.upper_bounds))
-        if not parsed_values:
-            raise ValueError("No valid upper bounds were provided.")
-        return parsed_values
-    if args.upper_bound is not None:
-        return [float(args.upper_bound)]
-    return list(DEFAULT_UPPER_BOUNDS)
+def resolve_run_schedule(run_schedule):
+    resolved_schedule = []
 
+    for index, item in enumerate(run_schedule, start=1):
+        if "upper_bound" not in item:
+            raise ValueError(f"RUN_SCHEDULE entry #{index} is missing 'upper_bound'.")
+        if "timeout_milps" not in item:
+            raise ValueError(f"RUN_SCHEDULE entry #{index} is missing 'timeout_milps'.")
 
-def resolve_timeout_milps(args):
-    if args.timeout_milps:
-        parsed_values = dedupe_preserving_order(parse_float_sequence(args.timeout_milps))
-        if not parsed_values:
-            raise ValueError("No valid timeout values were provided.")
-        return parsed_values
-    if args.timeout_milp is not None:
-        return [float(args.timeout_milp)]
-    return list(DEFAULT_TIMEOUT_MILPS)
+        upper_bound = float(item["upper_bound"])
+        timeout_milps = dedupe_preserving_order(float(value) for value in item["timeout_milps"])
+
+        if not timeout_milps:
+            raise ValueError(
+                f"RUN_SCHEDULE entry #{index} for upper_bound={upper_bound} has no timeout values."
+            )
+
+        resolved_schedule.append(
+            {
+                "upper_bound": upper_bound,
+                "timeout_milps": timeout_milps,
+            }
+        )
+
+    if not resolved_schedule:
+        raise ValueError("RUN_SCHEDULE is empty.")
+
+    return resolved_schedule
 
 
 def build_run_id(batch_run_id, upper_bound, timeout_milp, try_index):
@@ -93,104 +96,31 @@ def is_resolved(result):
     return not result["unresolved_labels"]
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Batch recursive timeout refinement for MNIST.")
-    parser.add_argument("--image-index", type=int, default=DEFAULT_IMAGE_INDEX)
-    parser.add_argument("--patch-x", type=int, default=DEFAULT_PATCH_X)
-    parser.add_argument("--patch-y", type=int, default=DEFAULT_PATCH_Y)
-    parser.add_argument("--patch-size", type=int, default=DEFAULT_PATCH_SIZE)
-    parser.add_argument(
-        "--upper-bound",
-        type=float,
-        default=None,
-        help="Run a single upper bound. Used only when --upper-bounds is not provided.",
-    )
-    parser.add_argument(
-        "--upper-bounds",
-        nargs="+",
-        default=None,
-        help=(
-            "Upper bounds to iterate through. Accepts space-separated values, "
-            "comma-separated values, or a mix of both. "
-            f"Default: {' '.join(str(value) for value in DEFAULT_UPPER_BOUNDS)}"
-        ),
-    )
-    parser.add_argument(
-        "--timeout-milp",
-        type=float,
-        default=None,
-        help="Run a single timeout. Used only when --timeout-milps is not provided.",
-    )
-    parser.add_argument(
-        "--timeout-milps",
-        nargs="+",
-        default=None,
-        help=(
-            "Timeouts to try for each upper bound until the run resolves. "
-            "Accepts space-separated values, comma-separated values, or a mix of both."
-        ),
-    )
-    parser.add_argument("--max-depth", type=int, default=DEFAULT_MAX_DEPTH)
-    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
-    parser.add_argument(
-        "--csv-path",
-        type=Path,
-        default=DEFAULT_CSV_PATH,
-        help=(
-            "Optional summary CSV path. If the file already exists, this run is "
-            "appended to it; otherwise it is created."
-        ),
-    )
-    parser.add_argument(
-        "--add-bool-constraints",
-        dest="add_bool_constraints",
-        action="store_true",
-        default=DEFAULT_ADD_BOOL_CONSTRAINTS,
-    )
-    parser.add_argument(
-        "--no-add-bool-constraints",
-        dest="add_bool_constraints",
-        action="store_false",
-    )
-    parser.add_argument(
-        "--use-refine-poly",
-        dest="use_refine_poly",
-        action="store_true",
-        default=DEFAULT_USE_REFINE_POLY,
-    )
-    parser.add_argument(
-        "--no-use-refine-poly",
-        dest="use_refine_poly",
-        action="store_false",
-    )
-    return parser.parse_args()
-
-
 def main():
-    args = parse_args()
     batch_run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-    upper_bounds = resolve_upper_bounds(args)
-    timeout_milps = resolve_timeout_milps(args)
-    runs_csv_path = resolve_runs_csv_path(args.csv_path, batch_run_id)
+    run_schedule = resolve_run_schedule(RUN_SCHEDULE)
+    runs_csv_path = resolve_runs_csv_path(CSV_PATH, batch_run_id)
 
     df = pd.read_csv(MNIST_DATA_PATH, header=None)
     labels = df.iloc[:, 0].values
     pixels = df.iloc[:, 1:].values
 
     print("Batch recursive verification settings")
-    print(f"image_index={args.image_index} patch=({args.patch_x}, {args.patch_y}) size={args.patch_size}")
-    print(f"upper_bounds={upper_bounds}")
-    print(f"timeout_milps={timeout_milps}")
+    print(f"image_index={IMAGE_INDEX} patch=({PATCH_X}, {PATCH_Y}) size={PATCH_SIZE}")
+    print(f"max_depth={MAX_DEPTH} top_k={TOP_K}")
+    print(f"run_schedule={run_schedule}")
     if SAVE_CSV:
         print(f"summary_csv={runs_csv_path}")
 
     batch_results = []
 
-    for upper_bound in upper_bounds:
+    for schedule_item in run_schedule:
+        upper_bound = schedule_item["upper_bound"]
+        timeout_milps = schedule_item["timeout_milps"]
         resolved_for_upper_bound = False
 
         print("\n" + "#" * 80)
-        print(f"Starting upper_bound={upper_bound}")
+        print(f"Starting upper_bound={upper_bound} with timeout schedule {timeout_milps}")
         print("#" * 80)
 
         for try_index, timeout_milp in enumerate(timeout_milps, start=1):
@@ -200,18 +130,18 @@ def main():
             )
 
             result = run_verifier.verify_image_with_recursive_timeout_refinement(
-                img_index=args.image_index,
+                img_index=IMAGE_INDEX,
                 pixels=pixels,
                 labels=labels,
-                x_box=args.patch_x,
-                y_box=args.patch_y,
-                size_box=args.patch_size,
+                x_box=PATCH_X,
+                y_box=PATCH_Y,
+                size_box=PATCH_SIZE,
                 timeout_milp=timeout_milp,
-                max_depth=args.max_depth,
-                top_k=args.top_k,
+                max_depth=MAX_DEPTH,
+                top_k=TOP_K,
                 ul=upper_bound,
-                add_bool_constraints=args.add_bool_constraints,
-                use_refine_poly=args.use_refine_poly,
+                add_bool_constraints=ADD_BOOL_CONSTRAINTS,
+                use_refine_poly=USE_REFINE_POLY,
                 run_id=build_run_id(batch_run_id, upper_bound, timeout_milp, try_index),
                 runs_csv_path=runs_csv_path,
                 save_csv=SAVE_CSV,
