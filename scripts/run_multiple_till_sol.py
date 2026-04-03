@@ -32,10 +32,15 @@ CSV_PATH = None
 
 # One entry per upper bound. For each upper bound, the timeout list is tried
 # in order until that bound resolves or the list is exhausted.
+# RUN_SCHEDULE = [
+#     {"upper_bound": 0.70, "timeout_milps": [15, 30, 60, 120, 200, 270, 450]},
+#     {"upper_bound": 0.75, "timeout_milps": [200, 600, 1200, 3000, 6500]},
+#     {"upper_bound": 0.80, "timeout_milps": [600,1000,5000,10000,15000,30000]},
+# ]
 RUN_SCHEDULE = [
-    {"upper_bound": 0.70, "timeout_milps": [15, 30, 60, 120, 200, 270, 450]},
-    {"upper_bound": 0.75, "timeout_milps": [200, 600, 1200, 3000, 6500]},
-    {"upper_bound": 0.80, "timeout_milps": [600,1000,5000,10000,15000,30000]},
+    {"upper_bound": 0.70, "timeout_milps": [72000]},
+    {"upper_bound": 0.75, "timeout_milps": [72000]},
+    {"upper_bound": 0.80, "timeout_milps": [72000]},
 ]
 
 

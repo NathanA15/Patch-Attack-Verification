@@ -73,6 +73,8 @@ So assuming our example is already in normalized values, we keep it as is and de
 Current test: we want to replace the bounds param from the config which represent the one bound that will be the same for all pixels, to a bounds list per pixel
 so that each pixel can get different bounds.
 
+21/03/2026
+First try, by hand without a pipeline to check if the splitting solution based on a relaxed adversarial example is viable and promising.
 Results:
 	- 31.49s for verifying Label 2 without split
 	- 25.83 for verifiying Label 2 after first split on 30 pixels
@@ -91,3 +93,19 @@ For each timed-out label, the script starts a separate refinement loop:
 5. Rerun ERAN for that single adversarial label only, using the refined per-pixel bounds.
 6. If the label is now verified or adversarial, stop for that label.
 7. If the label still times out, repeat the same process until `max_depth` is reached.
+
+
+## 03/04/26
+
+The pipeline to run the labeled that got a timeout with a split derived from the relaxed adversarial example is fully functionable with a split on 30 pixels.
+We got a csv that details the whole run `/root/Projects/Nathan/Patch-Attack-Verification/csv/recursive_timeout_refinement_20260326_175035_TODO.csv` and a csv detailing the same csv for each label run so that it will be easier in the future to compare to our benchmarks, here: `/root/Projects/Nathan/Patch-Attack-Verification/csv/recursive_timeout_refinement_20260326_175035_per_label_TODO.csv`.
+
+We are currently running the same upper bounds with a maximal timeout of 72k seconds (similar to without a timeout) just to get the end result.
+After this run ends, at our next meeting, our goal is to compare this run to the previous runs with the splits and check if a specific split of the run got better times and by how much did we improve run time for this specific label. We would like also to create a few graphs that display the comparison of all the different runs up to now, with the different solutions we came with from the start, that also includes the last runs with the splits, and show it as bar plot.
+
+Then after this, we ll do a meeting with Dana and check which direction should we continue, we understand that there is multiple degrees of freedom such as: 
+ - the number of pixels the split is done on and how do we split
+ - how should we choose the timeout (dynamic timeout, maybe based on solutions of relaxed)
+ - run from the start with one or multiple splits to get a shortcut to the solution and the run time and how do we choose the number of splits
+
+REMARK: We're not sure if stopping the splits as soon as we got a solution is the right thing and maybe we should check up to a maximum number of splits to maybe define an improvent in times at a specific split, regardless of whether it solved earlier or not.
