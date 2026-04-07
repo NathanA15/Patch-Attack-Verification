@@ -46,6 +46,9 @@ MILP_STATUS = {
 MILP_STATUS_NAME = {code: name for name, code in MILP_STATUS.items()}
 
 _PYTORCH_MODEL = None
+COUNTER_PATTERN = re.compile(
+    r"Counter is\s+\d+(?:\s+candidate label is\s+(\d+)\s+adv label is\s+(\d+)|\s+label is\s+(\d+))"
+)
 
 
 # =========================
@@ -155,10 +158,7 @@ def parse_label_results(text, failed_labels=None):
     """Parse per-label verification outcomes from a detailed ERAN log."""
 
     failed_set = set(failed_labels or [])
-    counter_pattern = re.compile(
-        r"Counter is\s+\d+(?:\s+candidate label is\s+(\d+)\s+adv label is\s+(\d+)|\s+label is\s+(\d+))"
-    )
-    counter_matches = list(counter_pattern.finditer(text))
+    counter_matches = list(COUNTER_PATTERN.finditer(text))
     results = []
 
     for idx, match in enumerate(counter_matches):
@@ -234,6 +234,172 @@ def parse_log_details(text):
         "last_status": statuses[-1] if statuses else None,
         "relaxed_example": parse_relaxed_example(text),
     }
+
+
+def iter_label_blocks(text):
+    """Yield raw log blocks for each adversarial-label attempt."""
+
+    matches = list(COUNTER_PATTERN.finditer(text))
+    for index, match in enumerate(matches):
+        adv_label = int(match.group(2) if match.group(2) is not None else match.group(3))
+        start = match.start()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        yield {
+            "adv_label": adv_label,
+            "block_text": text[start:end],
+        }
+
+
+def parse_block_local_runtime_seconds(block_text):
+    """Parse the local per-label runtime emitted inside an all-label ERAN run."""
+
+    verified_match = re.search(r"Time taken to successfully verify:\s*([0-9]+(?:\.[0-9]+)?)", block_text)
+    if verified_match:
+        return float(verified_match.group(1)), "initial_label_local_verify_time"
+
+    failure_match = re.search(
+        r"Time taken and terminate on failure:\s*([0-9]+(?:\.[0-9]+)?)", block_text
+    )
+    if failure_match:
+        return float(failure_match.group(1)), "initial_label_local_failure_time"
+
+    return None, "initial_label_local_missing"
+
+
+def classify_attempt_final_outcome(label_result):
+    """Classify one per-label attempt outcome for detailed CSV rows."""
+
+    if label_result.get("model_found_adv"):
+        return "adversarial"
+    if label_result.get("verified"):
+        return "verified"
+    if label_result.get("timed_out"):
+        return "timeout"
+    if label_result.get("failed"):
+        return "failed"
+    return "failed"
+
+
+def normalize_timeout_milp_schedule(timeout_milp):
+    """Normalize a scalar or per-depth timeout list into a non-empty float list."""
+
+    if isinstance(timeout_milp, (list, tuple)):
+        timeout_schedule = [float(value) for value in timeout_milp]
+    else:
+        timeout_schedule = [float(timeout_milp)]
+
+    if not timeout_schedule:
+        raise ValueError("timeout_milp must contain at least one timeout value.")
+
+    return timeout_schedule
+
+
+def resolve_timeout_milp_for_depth(timeout_schedule, depth):
+    """Return the effective timeout for a recursion depth."""
+
+    index = min(int(depth), len(timeout_schedule) - 1)
+    return float(timeout_schedule[index])
+
+
+def build_recursive_timeout_detail_rows(
+    *,
+    attempt_records,
+    img_index,
+    true_label,
+    x_box,
+    y_box,
+    size_box,
+    ul,
+    add_bool_constraints,
+    use_refine_poly,
+    middle_bound,
+    parent_total_run_time_seconds,
+    parent_status,
+    parent_attempt_count,
+    parent_max_depth_reached,
+):
+    """Build one detailed CSV row per label per recursive attempt."""
+
+    rows = []
+    label_attempt_counts = {}
+
+    for attempt_record in attempt_records:
+        log_text = Path(attempt_record["log_path"]).read_text()
+        block_infos = list(iter_label_blocks(log_text))
+        label_results_by_adv = {
+            int(label_result["adv_label"]): label_result
+            for label_result in attempt_record["result"]["label_results"]
+        }
+
+        if attempt_record["attempt_index"] == 0:
+            run_scope = "initial_all_labels"
+        else:
+            run_scope = "single_label_rerun"
+            if len(block_infos) != 1:
+                raise ValueError(
+                    f"Expected exactly one label block in rerun log {attempt_record['log_path']}, "
+                    f"found {len(block_infos)}."
+                )
+
+        for block_info in block_infos:
+            adv_label = int(block_info["adv_label"])
+            label_result = label_results_by_adv.get(adv_label)
+            if label_result is None:
+                raise ValueError(
+                    f"Missing parsed label result for adv_label={adv_label} in {attempt_record['log_path']}."
+                )
+
+            label_attempt_index = label_attempt_counts.get(adv_label, 0) + 1
+            label_attempt_counts[adv_label] = label_attempt_index
+            current_depth = label_attempt_index - 1
+
+            if attempt_record["attempt_index"] == 0:
+                iteration_runtime_seconds, runtime_source = parse_block_local_runtime_seconds(
+                    str(block_info["block_text"])
+                )
+            else:
+                iteration_runtime_seconds = attempt_record["attempt_runtime_seconds"]
+                runtime_source = "rerun_attempt_runtime"
+
+            final_outcome = classify_attempt_final_outcome(label_result)
+            status_code = label_result.get("milp_status")
+            is_timeout = final_outcome == "timeout" or status_code == MILP_STATUS["TIME_LIMIT"]
+            is_adversarial_found = final_outcome == "adversarial"
+
+            rows.append(
+                {
+                    "image_index": img_index,
+                    "true_label": true_label,
+                    "adv_label": adv_label,
+                    "patch_x": x_box,
+                    "patch_y": y_box,
+                    "patch_size": size_box,
+                    "upper_bound": ul,
+                    "timeout_milp_s": attempt_record["effective_timeout"],
+                    "add_bool_constraints": add_bool_constraints,
+                    "use_refine_poly": use_refine_poly,
+                    "middle_bound": middle_bound,
+                    "run_scope": run_scope,
+                    "global_attempt_index": attempt_record["attempt_index"],
+                    "label_attempt_index": label_attempt_index,
+                    "current_depth": current_depth,
+                    "status_code": status_code,
+                    "status_name": format_milp_status(status_code),
+                    "final_outcome": final_outcome,
+                    "is_timeout": is_timeout,
+                    "is_adversarial_found": is_adversarial_found,
+                    "iteration_runtime_seconds": iteration_runtime_seconds,
+                    "iteration_runtime_source": runtime_source,
+                    "attempt_runtime_seconds": attempt_record["attempt_runtime_seconds"],
+                    "parent_total_run_time_seconds": parent_total_run_time_seconds,
+                    "parent_status": parent_status,
+                    "parent_attempt_count": parent_attempt_count,
+                    "parent_max_depth_reached": parent_max_depth_reached,
+                    "log_path": str(attempt_record["log_path"]),
+                }
+            )
+
+    return rows
 
 
 def plot_adv(example):
@@ -724,7 +890,7 @@ def resolve_timed_out_labels(initial_results, base_bounds, max_depth, choose_pix
             depth += 1
             rerun_attempts += 1
 
-            rerun_result = rerun_label_fn(adv_label, state_bounds)
+            rerun_result = rerun_label_fn(adv_label, state_bounds, depth)
             rerun_seconds = elapsed_seconds(rerun_result["elapsed_time"])
             rerun_runtime += rerun_seconds
             label_runtime += rerun_seconds
@@ -809,7 +975,8 @@ def verify_image_with_recursive_timeout_refinement(
         x_box (int): Patch top-left x (column).
         y_box (int): Patch top-left y (row).
         size_box (int): Patch size.
-        timeout_milp (int | float, optional): MILP timeout per ERAN call.
+        timeout_milp (int | float | list[float], optional): MILP timeout per
+            ERAN call, or a per-depth timeout schedule.
         max_depth (int, optional): Maximum number of recursive split reruns.
         top_k (int, optional): Number of top-gradient patch pixels to split each rerun.
         ul (float, optional): Upper bound for patch pixels.
@@ -818,15 +985,16 @@ def verify_image_with_recursive_timeout_refinement(
         middle_bound (float, optional): Split point used by ERAN's bounds logic.
         with_plots (bool, optional): Whether to plot returned adversarial examples.
         run_id (str | None, optional): Run identifier used for logs and CSV naming.
-        runs_csv_path (str | Path | None, optional): Optional summary CSV path override.
+        runs_csv_path (str | Path | None, optional): Optional detailed CSV path override.
         run_log_dir (str | Path | None, optional): Optional per-run log directory override.
-        save_csv (bool, optional): Whether to append the summary row to CSV.
+        save_csv (bool, optional): Whether to append detailed rows to CSV.
 
     Returns:
         dict: Summary of the recursive timeout refinement run.
     """
 
     run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
+    timeout_schedule = normalize_timeout_milp_schedule(timeout_milp)
     runs_csv_path = resolve_runs_csv_path(runs_csv_path, run_id)
     if run_log_dir is None:
         run_log_dir = build_run_log_dir(run_id)
@@ -842,11 +1010,11 @@ def verify_image_with_recursive_timeout_refinement(
         f"label={label_img} patch=({x_box}, {y_box}) size={size_box}"
     )
     print(
-        f"upper_bound={ul} timeout_milp={timeout_milp} "
+        f"upper_bound={ul} timeout_schedule={timeout_schedule} "
         f"max_depth={max_depth} top_k={top_k}"
     )
     if save_csv:
-        print(f"Summary CSV: {runs_csv_path}")
+        print(f"Detailed CSV: {runs_csv_path}")
     print(f"Run log directory: {run_log_dir}")
     print("-" * 80)
 
@@ -855,12 +1023,15 @@ def verify_image_with_recursive_timeout_refinement(
     all_log_paths = []
     all_attempt_elapsed_times = []
     max_depth_reached = 0
+    attempt_records = []
 
-    def run_for_label(adv_label, bounds):
-        nonlocal total_runtime, attempt_count, all_log_paths, all_attempt_elapsed_times
+    def run_for_label(adv_label, bounds, depth):
+        nonlocal total_runtime, attempt_count, all_log_paths, all_attempt_elapsed_times, attempt_records
         global LOG_FILE
 
-        log_file = fresh_log_file(run_log_dir, attempt_count, adv_label)
+        attempt_index = attempt_count
+        effective_timeout = resolve_timeout_milp_for_depth(timeout_schedule, depth)
+        log_file = fresh_log_file(run_log_dir, attempt_index, adv_label)
         previous_log_file = LOG_FILE
         LOG_FILE = log_file
         attempt_count += 1
@@ -873,7 +1044,7 @@ def verify_image_with_recursive_timeout_refinement(
                 x_box=x_box,
                 y_box=y_box,
                 size_box=size_box,
-                timeout_milp=timeout_milp,
+                timeout_milp=effective_timeout,
                 with_plots=with_plots,
                 ul=ul,
                 add_bool_constraints=add_bool_constraints,
@@ -886,13 +1057,24 @@ def verify_image_with_recursive_timeout_refinement(
         finally:
             LOG_FILE = previous_log_file
 
-        run_seconds = elapsed_seconds(result["elapsed_time"])
+        run_seconds = round(elapsed_seconds(result["elapsed_time"]), 6)
         total_runtime += run_seconds
         all_attempt_elapsed_times.append(str(result["elapsed_time"]))
         all_log_paths.append(str(result["log_path"]))
+        attempt_records.append(
+            {
+                "attempt_index": attempt_index,
+                "depth": depth,
+                "adv_label": adv_label,
+                "effective_timeout": effective_timeout,
+                "attempt_runtime_seconds": run_seconds,
+                "log_path": Path(result["log_path"]),
+                "result": result,
+            }
+        )
         return result
 
-    initial_result = run_for_label(-1, base_bounds)
+    initial_result = run_for_label(-1, base_bounds, 0)
     initial_label_results = initial_result["label_results"]
     initial_timeout_labels = sorted(
         int(label_result["adv_label"])
@@ -944,27 +1126,24 @@ def verify_image_with_recursive_timeout_refinement(
         f"skipped_labels={skipped_labels}"
     )
 
-    row = {
-        "Image Index": img_index,
-        "X patch": x_box,
-        "Y patch": y_box,
-        "Patch Size": size_box,
-        "Upper bound": ul,
-        "Timeout MILP (s)": timeout_milp,
-        "Initial Timeout Labels": str(initial_timeout_labels),
-        "Finally Verified Labels": str(finally_verified_labels),
-        "Adversarial Labels": str(adversarial_labels),
-        "Unresolved Labels": str(unresolved_labels),
-        "ERAN Run Times": str(all_attempt_elapsed_times),
-        "Total Run Time (s)": round(total_runtime, 6),
-        "Max Depth Reached": max_depth_reached,
-        "Attempt Count": attempt_count,
-        "Status": overall_status,
-        "Comment": comment,
-        "Log paths": ";".join(all_log_paths),
-        "CSV path": "" if not save_csv else str(runs_csv_path),
-    }
-    append_run_row(runs_csv_path, row, save_csv=save_csv)
+    detail_rows = build_recursive_timeout_detail_rows(
+        attempt_records=attempt_records,
+        img_index=img_index,
+        true_label=label_img,
+        x_box=x_box,
+        y_box=y_box,
+        size_box=size_box,
+        ul=ul,
+        add_bool_constraints=add_bool_constraints,
+        use_refine_poly=use_refine_poly,
+        middle_bound=middle_bound,
+        parent_total_run_time_seconds=round(total_runtime, 6),
+        parent_status=overall_status,
+        parent_attempt_count=attempt_count,
+        parent_max_depth_reached=max_depth_reached,
+    )
+    for row in detail_rows:
+        append_run_row(runs_csv_path, row, save_csv=save_csv)
 
     print("\n" + "=" * 80)
     print(f"Status: {overall_status}")
@@ -988,7 +1167,8 @@ def verify_image_with_recursive_timeout_refinement(
         "finally_verified_labels": finally_verified_labels,
         "adversarial_labels": adversarial_labels,
         "unresolved_labels": unresolved_labels,
-        "timeout_milp": timeout_milp,
+        "timeout_milp": timeout_schedule[0] if len(timeout_schedule) == 1 else list(timeout_schedule),
+        "timeout_schedule": list(timeout_schedule),
         "eran_run_times": list(all_attempt_elapsed_times),
         "total_runtime_seconds": total_runtime,
         "max_depth_reached": max_depth_reached,
@@ -998,6 +1178,7 @@ def verify_image_with_recursive_timeout_refinement(
         "log_paths": all_log_paths,
         "csv_path": "" if not save_csv else str(runs_csv_path),
         "run_log_dir": str(run_log_dir),
+        "csv_rows_written": len(detail_rows) if save_csv else 0,
         "label_outcomes": label_outcomes,
         "stopped_early": resolved["stopped_early"],
         "adversarial_label": resolved["adversarial_label"],

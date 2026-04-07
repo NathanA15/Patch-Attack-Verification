@@ -1,6 +1,6 @@
 """
 Batch runner for recursive MNIST patch verification across upper bounds
-and timeout retries.
+and per-depth timeout schedules.
 """
 
 from datetime import datetime
@@ -30,30 +30,32 @@ USE_REFINE_POLY = False
 SAVE_CSV = True
 CSV_PATH = None
 
-# One entry per upper bound. For each upper bound, the timeout list is tried
-# in order until that bound resolves or the list is exhausted.
-# RUN_SCHEDULE = [
-#     {"upper_bound": 0.70, "timeout_milps": [15, 30, 60, 120, 200, 270, 450]},
-#     {"upper_bound": 0.75, "timeout_milps": [200, 600, 1200, 3000, 6500]},
-#     {"upper_bound": 0.80, "timeout_milps": [600,1000,5000,10000,15000,30000]},
-# ]
+# One entry per run. `timeout_milps[0]` is used for the initial all-labels
+# attempt, `timeout_milps[1]` for the first split depth, and so on. When the
+# recursion reaches a deeper depth than the list provides, the last timeout is
+# reused.
 RUN_SCHEDULE = [
-    {"upper_bound": 0.70, "timeout_milps": [72000]},
-    {"upper_bound": 0.75, "timeout_milps": [72000]},
-    {"upper_bound": 0.80, "timeout_milps": [72000]},
+    {"upper_bound": 0.70, "timeout_milps": [10, 72000]},
+    {"upper_bound": 0.70, "timeout_milps": [10, 10, 72000]},
+    {"upper_bound": 0.70, "timeout_milps": [10, 10, 10, 72000]},
+    {"upper_bound": 0.70, "timeout_milps": [10, 10, 10, 10, 72000]},
+
+    {"upper_bound": 0.75, "timeout_milps": [10, 72000]},
+    {"upper_bound": 0.75, "timeout_milps": [10, 10, 72000]},
+    {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 72000]},
+    {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 10, 72000]},
+
+    {"upper_bound": 0.80, "timeout_milps": [10, 72000]},
+    {"upper_bound": 0.80, "timeout_milps": [10, 10, 72000]},
+    {"upper_bound": 0.80, "timeout_milps": [10, 10, 10, 72000]},
+    {"upper_bound": 0.80, "timeout_milps": [10, 10, 10, 10, 72000]},
+
 ]
-
-
-def dedupe_preserving_order(values):
-    deduped = []
-    seen = set()
-    for value in values:
-        if value in seen:
-            continue
-        seen.add(value)
-        deduped.append(value)
-    return deduped
-
+# RUN_SCHEDULE = [
+#     {"upper_bound": 0.70, "timeout_milps": [72000]},
+#     {"upper_bound": 0.75, "timeout_milps": [72000]},
+#     {"upper_bound": 0.80, "timeout_milps": [72000]},
+# ]
 
 def resolve_run_schedule(run_schedule):
     resolved_schedule = []
@@ -65,7 +67,7 @@ def resolve_run_schedule(run_schedule):
             raise ValueError(f"RUN_SCHEDULE entry #{index} is missing 'timeout_milps'.")
 
         upper_bound = float(item["upper_bound"])
-        timeout_milps = dedupe_preserving_order(float(value) for value in item["timeout_milps"])
+        timeout_milps = [float(value) for value in item["timeout_milps"]]
 
         if not timeout_milps:
             raise ValueError(
@@ -85,15 +87,16 @@ def resolve_run_schedule(run_schedule):
     return resolved_schedule
 
 
-def build_run_id(batch_run_id, upper_bound, timeout_milp, try_index):
+def build_run_id(batch_run_id, upper_bound, timeout_milps, schedule_index):
     def normalize(value):
         return f"{value:g}".replace("-", "m").replace(".", "p")
 
+    timeout_tag = "_".join(normalize(value) for value in timeout_milps)
     return (
         f"{batch_run_id}_"
+        f"run_{schedule_index:02d}_"
         f"ub_{normalize(upper_bound)}_"
-        f"timeout_{normalize(timeout_milp)}_"
-        f"try_{try_index:02d}"
+        f"timeouts_{timeout_tag}"
     )
 
 
@@ -115,68 +118,52 @@ def main():
     print(f"max_depth={MAX_DEPTH} top_k={TOP_K}")
     print(f"run_schedule={run_schedule}")
     if SAVE_CSV:
-        print(f"summary_csv={runs_csv_path}")
+        print(f"details_csv={runs_csv_path}")
 
     batch_results = []
 
-    for schedule_item in run_schedule:
+    for schedule_index, schedule_item in enumerate(run_schedule, start=1):
         upper_bound = schedule_item["upper_bound"]
         timeout_milps = schedule_item["timeout_milps"]
-        resolved_for_upper_bound = False
 
         print("\n" + "#" * 80)
         print(f"Starting upper_bound={upper_bound} with timeout schedule {timeout_milps}")
         print("#" * 80)
 
-        for try_index, timeout_milp in enumerate(timeout_milps, start=1):
+        result = run_verifier.verify_image_with_recursive_timeout_refinement(
+            img_index=IMAGE_INDEX,
+            pixels=pixels,
+            labels=labels,
+            x_box=PATCH_X,
+            y_box=PATCH_Y,
+            size_box=PATCH_SIZE,
+            timeout_milp=timeout_milps,
+            max_depth=MAX_DEPTH,
+            top_k=TOP_K,
+            ul=upper_bound,
+            add_bool_constraints=ADD_BOOL_CONSTRAINTS,
+            use_refine_poly=USE_REFINE_POLY,
+            run_id=build_run_id(batch_run_id, upper_bound, timeout_milps, schedule_index),
+            runs_csv_path=runs_csv_path,
+            save_csv=SAVE_CSV,
+        )
+
+        batch_results.append(
+            {
+                "upper_bound": upper_bound,
+                "timeout_schedule": timeout_milps,
+                "result": result,
+            }
+        )
+
+        if is_resolved(result):
             print(
-                f"\nRunning upper_bound={upper_bound} "
-                f"timeout_milp={timeout_milp} try={try_index}/{len(timeout_milps)}"
+                f"Resolved upper_bound={upper_bound} with timeout_schedule={timeout_milps} "
+                f"status={result['status']} total_runtime={result['total_runtime_seconds']:.2f}s"
             )
-
-            result = run_verifier.verify_image_with_recursive_timeout_refinement(
-                img_index=IMAGE_INDEX,
-                pixels=pixels,
-                labels=labels,
-                x_box=PATCH_X,
-                y_box=PATCH_Y,
-                size_box=PATCH_SIZE,
-                timeout_milp=timeout_milp,
-                max_depth=MAX_DEPTH,
-                top_k=TOP_K,
-                ul=upper_bound,
-                add_bool_constraints=ADD_BOOL_CONSTRAINTS,
-                use_refine_poly=USE_REFINE_POLY,
-                run_id=build_run_id(batch_run_id, upper_bound, timeout_milp, try_index),
-                runs_csv_path=runs_csv_path,
-                save_csv=SAVE_CSV,
-            )
-
-            batch_results.append(
-                {
-                    "upper_bound": upper_bound,
-                    "timeout_milp": timeout_milp,
-                    "try_index": try_index,
-                    "result": result,
-                }
-            )
-
-            if is_resolved(result):
-                resolved_for_upper_bound = True
-                print(
-                    f"Resolved upper_bound={upper_bound} with timeout_milp={timeout_milp} "
-                    f"status={result['status']} total_runtime={result['total_runtime_seconds']:.2f}s"
-                )
-                break
-
+        else:
             print(
-                f"upper_bound={upper_bound} remained unresolved with timeout_milp={timeout_milp}; "
-                "trying the next timeout."
-            )
-
-        if not resolved_for_upper_bound:
-            print(
-                f"upper_bound={upper_bound} stayed unresolved after timeout schedule {timeout_milps}"
+                f"upper_bound={upper_bound} stayed unresolved with timeout_schedule={timeout_milps}"
             )
 
     print("\n" + "=" * 80)
@@ -185,8 +172,8 @@ def main():
     for item in batch_results:
         result = item["result"]
         print(
-            f"upper_bound={item['upper_bound']} timeout_milp={item['timeout_milp']} "
-            f"try={item['try_index']} status={result['status']} "
+            f"upper_bound={item['upper_bound']} timeout_schedule={item['timeout_schedule']} "
+            f"status={result['status']} "
             f"total_runtime={result['total_runtime_seconds']:.2f}s "
             f"eran_runs={result['attempt_count']}"
         )

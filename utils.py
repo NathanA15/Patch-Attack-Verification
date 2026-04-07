@@ -9,24 +9,34 @@ from config import CSV_DIR, LOG_DIR
 
 
 RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS = [
-    "Image Index",
-    "X patch",
-    "Y patch",
-    "Patch Size",
-    "Upper bound",
-    "Timeout MILP (s)",
-    "Initial Timeout Labels",
-    "Finally Verified Labels",
-    "Adversarial Labels",
-    "Unresolved Labels",
-    "ERAN Run Times",
-    "Total Run Time (s)",
-    "Max Depth Reached",
-    "Attempt Count",
-    "Status",
-    "Comment",
-    "Log paths",
-    "CSV path",
+    "image_index",
+    "true_label",
+    "adv_label",
+    "patch_x",
+    "patch_y",
+    "patch_size",
+    "upper_bound",
+    "timeout_milp_s",
+    "add_bool_constraints",
+    "use_refine_poly",
+    "middle_bound",
+    "run_scope",
+    "global_attempt_index",
+    "label_attempt_index",
+    "current_depth",
+    "status_code",
+    "status_name",
+    "final_outcome",
+    "is_timeout",
+    "is_adversarial_found",
+    "iteration_runtime_seconds",
+    "iteration_runtime_source",
+    "attempt_runtime_seconds",
+    "parent_total_run_time_seconds",
+    "parent_status",
+    "parent_attempt_count",
+    "parent_max_depth_reached",
+    "log_path",
 ]
 
 
@@ -74,7 +84,7 @@ def generate_initial_bounds(num_pixels, lb=0, ub=1):
 
 def build_runs_csv_path(run_id=None):
     """
-    Build the summary CSV path for recursive timeout refinement runs.
+    Build the detailed CSV path for recursive timeout refinement runs.
     """
     timestamp = run_id or time.strftime("%Y_%m_%d_%H_%M_%S")
     return Path(CSV_DIR) / f"recursive_timeout_refinement_{timestamp}.csv"
@@ -82,7 +92,7 @@ def build_runs_csv_path(run_id=None):
 
 def resolve_runs_csv_path(csv_path=None, run_id=None):
     """
-    Resolve the summary CSV path for recursive timeout refinement runs.
+    Resolve the detailed CSV path for recursive timeout refinement runs.
 
     If ``csv_path`` is provided, it is reused as-is so multiple runs can append
     to the same CSV. Otherwise a timestamped per-run CSV path is generated.
@@ -131,7 +141,7 @@ def ensure_trailing_newline(path):
 
 def append_run_row(csv_path, row, save_csv=True):
     """
-    Append one summary row for a recursive timeout refinement run.
+    Append one detailed row for a recursive timeout refinement run.
     """
     if not save_csv:
         return

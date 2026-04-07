@@ -54,6 +54,21 @@ OUTPUT_COLUMNS = [
     "log_path",
 ]
 
+LEGACY_SUMMARY_COLUMNS = [
+    "Image Index",
+    "X patch",
+    "Y patch",
+    "Patch Size",
+    "Upper bound",
+    "Timeout MILP (s)",
+    "ERAN Run Times",
+    "Total Run Time (s)",
+    "Max Depth Reached",
+    "Attempt Count",
+    "Status",
+    "Log paths",
+]
+
 
 COUNTER_PATTERN = re.compile(
     r"Counter is\s+\d+(?:\s+candidate label is\s+(\d+)\s+adv label is\s+(\d+)|\s+label is\s+(\d+))"
@@ -295,6 +310,20 @@ def flatten_csv(input_csv: Path, output_csv: Path) -> int:
 
     with input_csv.open(newline="") as infile, output_csv.open("w", newline="") as outfile:
         reader = csv.DictReader(infile)
+        fieldnames = reader.fieldnames or []
+        if "image_index" in fieldnames and "global_attempt_index" in fieldnames:
+            raise ValueError(
+                f"{input_csv} already uses the detailed per-label schema. "
+                "New recursive runs no longer need flattening."
+            )
+
+        missing_columns = [column for column in LEGACY_SUMMARY_COLUMNS if column not in fieldnames]
+        if missing_columns:
+            raise ValueError(
+                f"{input_csv} does not match the legacy summary schema required for flattening. "
+                f"Missing columns: {missing_columns}"
+            )
+
         writer = csv.DictWriter(outfile, fieldnames=OUTPUT_COLUMNS)
         writer.writeheader()
 
