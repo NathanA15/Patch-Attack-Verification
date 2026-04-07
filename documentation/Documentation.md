@@ -109,3 +109,10 @@ Then after this, we ll do a meeting with Dana and check which direction should w
  - run from the start with one or multiple splits to get a shortcut to the solution and the run time and how do we choose the number of splits
 
 REMARK: We're not sure if stopping the splits as soon as we got a solution is the right thing and maybe we should check up to a maximum number of splits to maybe define an improvent in times at a specific split, regardless of whether it solved earlier or not.
+
+
+
+## 07/04/26
+
+Compared the result with dynamic split with 30 top pixels.
+![Bencmark vs first test](Projects/Nathan/Patch-Attack-Verification/images/runtime_comparison_benchmark_vs_result_20260407_075456.png)
