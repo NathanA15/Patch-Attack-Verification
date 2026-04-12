@@ -49,13 +49,14 @@ def milp_callback(model, where):
             model.terminate()
         if obj_best < -0.01:
             model.terminate()
-    if where == GRB.Callback.MIPSOL:
-        print(64 * "=")
-        print(64 * "=")
-        print("Found a solution with objective ", model.cbGet(GRB.Callback.MIP_OBJBST))
-        print(model.cbGetSolution(model.getVars()))
-        print(64 * "=")
-        print(64 * "=")
+    # Code throwing error
+    # if where == GRB.Callback.MIPSOL:
+    #     print(64 * "=")
+    #     print(64 * "=")
+    #     print("Found a solution with objective ", model.cbGet(GRB.Callback.MIP_OBJBST)) # error thrown here
+    #     print(model.cbGetSolution(model.getVars()))
+    #     print(64 * "=")
+    #     print(64 * "=")
 
 def lp_callback(model, where):
     # pass
