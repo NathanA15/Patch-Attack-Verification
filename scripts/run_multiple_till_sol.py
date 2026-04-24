@@ -19,7 +19,7 @@ from utils import resolve_runs_csv_path
 
 
 # Edit these globals to define what the script will run.
-IMAGE_INDEX = 2
+IMAGE_INDEX = 12
 PATCH_X = 0
 PATCH_Y = 0
 PATCH_SIZE = 10
@@ -35,20 +35,40 @@ CSV_PATH = None
 # recursion reaches a deeper depth than the list provides, the last timeout is
 # reused.
 RUN_SCHEDULE = [
-    {"upper_bound": 0.70, "timeout_milps": [10, 72000]},
-    {"upper_bound": 0.70, "timeout_milps": [10, 10, 72000]},
-    {"upper_bound": 0.70, "timeout_milps": [10, 10, 10, 72000]},
-    {"upper_bound": 0.70, "timeout_milps": [10, 10, 10, 10, 72000]},
+    # {"upper_bound": 0.70, "timeout_milps": [720000]},
+    # {"upper_bound": 0.70, "timeout_milps": [10, 720000]},
+    # {"upper_bound": 0.70, "timeout_milps": [10, 10, 720000]},
+    # {"upper_bound": 0.70, "timeout_milps": [10, 10, 10, 720000]},
 
-    {"upper_bound": 0.75, "timeout_milps": [10, 72000]},
-    {"upper_bound": 0.75, "timeout_milps": [10, 10, 72000]},
-    {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 72000]},
-    {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 10, 72000]},
+    # {"upper_bound": 0.75, "timeout_milps": [720000]},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 720000]},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 10, 720000]},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000]},
 
-    {"upper_bound": 0.80, "timeout_milps": [10, 72000]},
-    {"upper_bound": 0.80, "timeout_milps": [10, 10, 72000]},
-    {"upper_bound": 0.80, "timeout_milps": [10, 10, 10, 72000]},
-    {"upper_bound": 0.80, "timeout_milps": [10, 10, 10, 10, 72000]},
+    {"upper_bound": 0.80, "timeout_milps": [720000]},
+    {"upper_bound": 0.80, "timeout_milps": [10, 720000]},
+    {"upper_bound": 0.80, "timeout_milps": [10, 10, 720000]},
+    {"upper_bound": 0.80, "timeout_milps": [10, 10, 10, 720000]},
+
+    # {"upper_bound": 0.85, "timeout_milps": [720000]},
+    # {"upper_bound": 0.85, "timeout_milps": [10, 720000]},
+    # {"upper_bound": 0.85, "timeout_milps": [10, 10, 720000]},
+    # {"upper_bound": 0.85, "timeout_milps": [10, 10, 10, 720000]},
+
+    {"upper_bound": 0.90, "timeout_milps": [720000]},
+    {"upper_bound": 0.90, "timeout_milps": [10, 720000]},
+    {"upper_bound": 0.90, "timeout_milps": [10, 10, 720000]},
+    {"upper_bound": 0.90, "timeout_milps": [10, 10, 10, 720000]},
+
+    # {"upper_bound": 0.95, "timeout_milps": [720000]},
+    # {"upper_bound": 0.95, "timeout_milps": [10, 720000]},
+    # {"upper_bound": 0.95, "timeout_milps": [10, 10, 720000]},
+    # {"upper_bound": 0.95, "timeout_milps": [10, 10, 10, 720000]},
+
+    {"upper_bound": 1.0, "timeout_milps": [720000]},
+    {"upper_bound": 1.0, "timeout_milps": [10, 720000]},
+    {"upper_bound": 1.0, "timeout_milps": [10, 10, 720000]},
+    {"upper_bound": 1.0, "timeout_milps": [10, 10, 10, 720000]},
 
 ]
 # RUN_SCHEDULE = [

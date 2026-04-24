@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
-Create a runtime comparison bar plot from fixed benchmark and result CSV files.
+Create a runtime comparison bar plot from a single CSV file containing all runs,
+including the baseline (no-split) run and recursive timeout refinement runs.
+
+The baseline run is identified by parent_attempt_count == 1 (no splits).
+Split runs have parent_attempt_count > 1 and are distinguished by their
+parent_max_depth_reached value.
 """
 
 from __future__ import annotations
@@ -18,24 +23,20 @@ from matplotlib.patches import Patch
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-BENCHMARK_CSV_PATH = (
+CSV_PATH = (
     PROJECT_ROOT
     / "csv"
-    / "recursive_timeout_refinement_20260403_082312_per_label_BENCHMARK.csv"
+    / "recursive_timeout_refinement_20260413_194652.csv"
 )
-RESULT_CSV_PATH = PROJECT_ROOT / "csv" / "recursive_timeout_refinement_20260407_091932.csv"
 OUTPUT_DIR = PROJECT_ROOT / "images"
 
 EXCLUDED_STATUS_NAME = "TIME_LIMIT"
-MIN_RESULT_DEPTH = 1
-EXPECTED_UPPER_BOUNDS = [0.7, 0.75, 0.8]
-EXPECTED_ADV_LABELS = [0, 2, 3, 4, 5, 6, 7, 8, 9]
-
-BENCHMARK_COLOR = "#4C78A8"
-RESULT_COLOR = "#F58518"
+BASELINE_COLOR = "#4C78A8"
+SPLIT_COLORS = ["#F58518", "#F58518", "#F58518"]
 
 
 def load_shared_plot_metadata(csv_path: Path) -> dict[str, str]:
+    """Extract shared metadata (image_index, patch_x/y, patch_size) from CSV."""
     metadata_keys = ("image_index", "patch_x", "patch_y", "patch_size")
     metadata_values = {key: set() for key in metadata_keys}
 
@@ -56,152 +57,174 @@ def load_shared_plot_metadata(csv_path: Path) -> dict[str, str]:
     return resolved_metadata
 
 
-def load_and_validate_plot_metadata() -> dict[str, str]:
-    benchmark_metadata = load_shared_plot_metadata(BENCHMARK_CSV_PATH)
-    result_metadata = load_shared_plot_metadata(RESULT_CSV_PATH)
-
-    if benchmark_metadata != result_metadata:
-        raise ValueError(
-            "Benchmark and result CSV metadata do not match: "
-            f"{benchmark_metadata} != {result_metadata}"
-        )
-
-    return benchmark_metadata
-
-
-def parse_runtime_seconds(row: dict[str, str], *, csv_path: Path) -> float:
+def parse_runtime_seconds(row: dict[str, str]) -> float | None:
     runtime_seconds = row["iteration_runtime_seconds"].strip()
     if not runtime_seconds:
-        raise ValueError(
-            "Missing iteration_runtime_seconds for "
-            f"{csv_path} at upper_bound={row['upper_bound']}, "
-            f"adv_label={row['adv_label']}, current_depth={row['current_depth']}, "
-            f"status_name={row['status_name']}"
-        )
-
+        return None
     return float(runtime_seconds)
 
 
+def identify_runs(csv_path: Path) -> dict[str, dict]:
+    """
+    Identify distinct runs from the CSV by extracting the run identifier
+    from the log_path column.
+
+    Returns a dict mapping run_id -> {upper_bound, parent_attempt_count,
+    parent_max_depth_reached, timeout_chain}.
+    """
+    runs: dict[str, dict] = {}
+
+    with csv_path.open(newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            log_path = row["log_path"].strip()
+            # Extract run directory name, e.g.
+            # "20260411_152600_run_01_ub_0p8_timeouts_720000"
+            parts = Path(log_path).parent.name
+            if parts in runs:
+                continue
+
+            runs[parts] = {
+                "upper_bound": float(row["upper_bound"]),
+                "parent_attempt_count": int(row["parent_attempt_count"]),
+                "parent_max_depth_reached": int(row["parent_max_depth_reached"]),
+                "final_outcome": row["final_outcome"].strip(),
+            }
+
+    return runs
+
+
 def discover_grid(csv_path: Path) -> tuple[list[float], list[int]]:
+    """Discover the set of upper_bounds and adv_labels present in the CSV."""
     upper_bounds: set[float] = set()
     adv_labels: set[int] = set()
-    seen_pairs: set[tuple[float, int]] = set()
 
     with csv_path.open(newline="") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
-            upper_bound = float(row["upper_bound"])
-            adv_label = int(row["adv_label"])
-            upper_bounds.add(upper_bound)
-            adv_labels.add(adv_label)
-            seen_pairs.add((upper_bound, adv_label))
+            upper_bounds.add(float(row["upper_bound"]))
+            adv_labels.add(int(row["adv_label"]))
 
-    sorted_upper_bounds = sorted(upper_bounds)
-    sorted_adv_labels = sorted(adv_labels)
-
-    if sorted_upper_bounds != EXPECTED_UPPER_BOUNDS:
-        raise ValueError(
-            f"Expected upper bounds {EXPECTED_UPPER_BOUNDS}, "
-            f"but found {sorted_upper_bounds} in {csv_path}"
-        )
-
-    if sorted_adv_labels != EXPECTED_ADV_LABELS:
-        raise ValueError(
-            f"Expected adv labels {EXPECTED_ADV_LABELS}, "
-            f"but found {sorted_adv_labels} in {csv_path}"
-        )
-
-    expected_pairs = {
-        (upper_bound, adv_label)
-        for upper_bound in sorted_upper_bounds
-        for adv_label in sorted_adv_labels
-    }
-    if seen_pairs != expected_pairs:
-        missing_pairs = sorted(expected_pairs - seen_pairs)
-        unexpected_pairs = sorted(seen_pairs - expected_pairs)
-        raise ValueError(
-            "Benchmark grid does not form the expected 3x9 layout. "
-            f"Missing pairs: {missing_pairs} | Unexpected pairs: {unexpected_pairs}"
-        )
-
-    return sorted_upper_bounds, sorted_adv_labels
+    return sorted(upper_bounds), sorted(adv_labels)
 
 
-def load_benchmark_runtimes(
-    csv_path: Path, valid_pairs: set[tuple[float, int]]
+def load_baseline_runtimes(
+    csv_path: Path,
 ) -> dict[tuple[float, int], float]:
-    benchmark_runtimes: dict[tuple[float, int], float] = {}
+    """
+    Load runtimes from the baseline (no-split) runs.
+
+    Baseline runs are identified by parent_attempt_count == 1.
+    Only rows from initial_all_labels scope are used.
+    For each (upper_bound, adv_label), we take the per-label runtime.
+    """
+    baseline_runtimes: dict[tuple[float, int], float] = {}
 
     with csv_path.open(newline="") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
-            if row["status_name"] == EXCLUDED_STATUS_NAME:
+            if int(row["parent_attempt_count"]) != 1:
+                continue
+
+            if row["status_name"].strip() == EXCLUDED_STATUS_NAME:
                 continue
 
             key = (float(row["upper_bound"]), int(row["adv_label"]))
-            if key not in valid_pairs:
+            runtime_seconds = parse_runtime_seconds(row)
+            if runtime_seconds is None:
                 continue
 
-            runtime_seconds = parse_runtime_seconds(row, csv_path=csv_path)
-            if key in benchmark_runtimes:
+            if key in baseline_runtimes:
                 raise ValueError(
-                    "Found multiple non-TIME_LIMIT benchmark runtimes for "
+                    "Found multiple non-TIME_LIMIT baseline runtimes for "
                     f"upper_bound={key[0]}, adv_label={key[1]} in {csv_path}"
                 )
 
-            benchmark_runtimes[key] = runtime_seconds
+            baseline_runtimes[key] = runtime_seconds
 
-    return benchmark_runtimes
+    return baseline_runtimes
 
 
-def load_result_depth_runtimes(
-    csv_path: Path, valid_pairs: set[tuple[float, int]]
-) -> dict[tuple[float, int], dict[int, float]]:
-    result_runtimes: dict[tuple[float, int], dict[int, float]] = defaultdict(dict)
+def load_split_runtimes(
+    csv_path: Path,
+) -> dict[int, dict[tuple[float, int], dict[int, float]]]:
+    """
+    Load runtimes from the split (recursive timeout) runs, grouped by
+    parent_max_depth_reached.
+
+    Returns: {max_depth: {(upper_bound, adv_label): {current_depth: runtime}}}
+
+    For each split run, we collect non-TIME_LIMIT rows across all depths.
+    The initial_all_labels rows at depth 0 are the "depth 0" entries,
+    while single_label_rerun rows provide deeper depth entries.
+    """
+    # Group by (parent_attempt_count, parent_max_depth_reached, upper_bound)
+    # to identify distinct split configurations[]
+    split_runtimes: dict[int, dict[tuple[float, int], dict[int, float]]] = defaultdict(
+        lambda: defaultdict(dict)
+    )
 
     with csv_path.open(newline="") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
-            if row["status_name"] == EXCLUDED_STATUS_NAME:
+            attempt_count = int(row["parent_attempt_count"])
+            if attempt_count == 1:
+                continue  # Skip baseline
+
+            if row["status_name"].strip() == EXCLUDED_STATUS_NAME:
                 continue
 
+            max_depth = int(row["parent_max_depth_reached"])
+            upper_bound = float(row["upper_bound"])
+            adv_label = int(row["adv_label"])
             current_depth = int(row["current_depth"])
-            if current_depth < MIN_RESULT_DEPTH:
+            key = (upper_bound, adv_label)
+
+            runtime_seconds = parse_runtime_seconds(row)
+            if runtime_seconds is None:
                 continue
 
-            key = (float(row["upper_bound"]), int(row["adv_label"]))
-            if key not in valid_pairs:
-                continue
-
-            runtime_seconds = parse_runtime_seconds(row, csv_path=csv_path)
-            if current_depth in result_runtimes[key]:
+            if current_depth in split_runtimes[max_depth][key]:
                 raise ValueError(
-                    "Found multiple non-TIME_LIMIT result runtimes for "
-                    f"upper_bound={key[0]}, adv_label={key[1]}, current_depth={current_depth} "
+                    "Found multiple non-TIME_LIMIT runtimes for "
+                    f"max_depth={max_depth}, upper_bound={upper_bound}, "
+                    f"adv_label={adv_label}, current_depth={current_depth} "
                     f"in {csv_path}"
                 )
 
-            result_runtimes[key][current_depth] = runtime_seconds
+            split_runtimes[max_depth][key][current_depth] = runtime_seconds
 
-    return dict(result_runtimes)
+    return {k: dict(v) for k, v in split_runtimes.items()}
 
 
 def build_plot_entries(
-    benchmark_runtime: float | None, depth_runtimes: dict[int, float]
+    baseline_runtime: float | None,
+    split_depth_runtimes: dict[int, dict[int, float]],
+    sorted_max_depths: list[int],
 ) -> tuple[list[str], list[float], list[str]]:
+    """
+    Build bar labels, values, and colors for one subplot cell.
+
+    For each (upper_bound, adv_label), we show:
+    - One bar for the baseline runtime
+    - For each max_depth split run, one bar per depth level within that run
+    """
     labels: list[str] = []
     values: list[float] = []
     colors: list[str] = []
 
-    if benchmark_runtime is not None:
+    if baseline_runtime is not None:
         labels.append("Benchmark")
-        values.append(benchmark_runtime)
-        colors.append(BENCHMARK_COLOR)
+        values.append(baseline_runtime)
+        colors.append(BASELINE_COLOR)
 
-    for depth in sorted(depth_runtimes):
-        labels.append(f"Depth {depth}")
-        values.append(depth_runtimes[depth])
-        colors.append(RESULT_COLOR)
+    for i, max_depth in enumerate(sorted_max_depths):
+        depth_runtimes = split_depth_runtimes.get(max_depth, {})
+        color = SPLIT_COLORS[i % len(SPLIT_COLORS)]
+        for depth in sorted(depth_runtimes):
+            labels.append(f"Split {i + 1}")
+            values.append(depth_runtimes[depth])
+            colors.append(color)
 
     return labels, values, colors
 
@@ -211,12 +234,15 @@ def plot_subplot(
     *,
     upper_bound: float,
     adv_label: int,
-    benchmark_runtime: float | None,
-    depth_runtimes: dict[int, float],
+    baseline_runtime: float | None,
+    split_depth_runtimes: dict[int, dict[int, float]],
+    sorted_max_depths: list[int],
 ) -> None:
-    x_labels, values, colors = build_plot_entries(benchmark_runtime, depth_runtimes)
-    axis.set_title(f"upper_bound={upper_bound}, adv_label={adv_label}", fontsize=11)
-    axis.set_ylabel("iteration_runtime_seconds")
+    x_labels, values, colors = build_plot_entries(
+        baseline_runtime, split_depth_runtimes, sorted_max_depths
+    )
+    axis.set_title(f"ub={upper_bound}, adv={adv_label}", fontsize=9)
+    axis.set_ylabel("runtime (s)", fontsize=7)
 
     if not values:
         axis.text(
@@ -235,25 +261,24 @@ def plot_subplot(
     x_positions = list(range(len(values)))
     axis.bar(x_positions, values, color=colors)
     axis.set_xticks(x_positions)
-    axis.set_xticklabels(x_labels, rotation=30, ha="right")
+    axis.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=6)
     axis.grid(axis="y", linestyle="--", alpha=0.35)
 
 
 def create_runtime_comparison_plot() -> Path:
-    plot_metadata = load_and_validate_plot_metadata()
-    upper_bounds, adv_labels = discover_grid(BENCHMARK_CSV_PATH)
-    valid_pairs = {
-        (upper_bound, adv_label) for upper_bound in upper_bounds for adv_label in adv_labels
-    }
-    benchmark_runtimes = load_benchmark_runtimes(BENCHMARK_CSV_PATH, valid_pairs)
-    result_depth_runtimes = load_result_depth_runtimes(RESULT_CSV_PATH, valid_pairs)
+    plot_metadata = load_shared_plot_metadata(CSV_PATH)
+    upper_bounds, adv_labels = discover_grid(CSV_PATH)
+
+    baseline_runtimes = load_baseline_runtimes(CSV_PATH)
+    split_runtimes = load_split_runtimes(CSV_PATH)
+    sorted_max_depths = sorted(split_runtimes.keys())
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = (
         OUTPUT_DIR
         / (
-            "runtime_comparison_benchmark_vs_depth"
+            "runtime_comparison_baseline_vs_splits"
             f"_img_{plot_metadata['image_index']}"
             f"_patch_{plot_metadata['patch_x']}_{plot_metadata['patch_y']}"
             f"_size_{plot_metadata['patch_size']}"
@@ -264,30 +289,46 @@ def create_runtime_comparison_plot() -> Path:
     figure, axes = plt.subplots(
         nrows=len(upper_bounds),
         ncols=len(adv_labels),
-        figsize=(34, 14),
+        figsize=(34, 4 * len(upper_bounds)),
         constrained_layout=False,
     )
 
+    # Handle single row/col edge cases
+    if len(upper_bounds) == 1 and len(adv_labels) == 1:
+        axes = [[axes]]
+    elif len(upper_bounds) == 1:
+        axes = [axes]
+    elif len(adv_labels) == 1:
+        axes = [[ax] for ax in axes]
+
     legend_handles = [
-        Patch(facecolor=BENCHMARK_COLOR, label="Benchmark runtime"),
-        Patch(facecolor=RESULT_COLOR, label="Result depth runtime"),
+        Patch(facecolor=BASELINE_COLOR, label="Benchmark (no splits)"),
+        Patch(facecolor=SPLIT_COLORS[0], label="Split runs"),
     ]
-    figure.legend(handles=legend_handles, loc="upper center", ncol=2, frameon=False)
+    figure.legend(handles=legend_handles, loc="upper center", ncol=len(legend_handles), frameon=False)
 
     for row_index, upper_bound in enumerate(upper_bounds):
         for col_index, adv_label in enumerate(adv_labels):
-            axis = axes[row_index, col_index]
+            axis = axes[row_index][col_index]
             key = (upper_bound, adv_label)
+
+            # Gather per-max_depth runtimes for this cell
+            cell_split_runtimes: dict[int, dict[int, float]] = {}
+            for max_depth in sorted_max_depths:
+                if key in split_runtimes.get(max_depth, {}):
+                    cell_split_runtimes[max_depth] = split_runtimes[max_depth][key]
+
             plot_subplot(
                 axis,
                 upper_bound=upper_bound,
                 adv_label=adv_label,
-                benchmark_runtime=benchmark_runtimes.get(key),
-                depth_runtimes=result_depth_runtimes.get(key, {}),
+                baseline_runtime=baseline_runtimes.get(key),
+                split_depth_runtimes=cell_split_runtimes,
+                sorted_max_depths=sorted_max_depths,
             )
 
     figure.suptitle(
-        "Runtime comparison for benchmark vs per-depth result runtimes\n"
+        "Runtime comparison: baseline (no splits) vs recursive timeout splits\n"
         f"image_index={plot_metadata['image_index']} | "
         f"patch=({plot_metadata['patch_x']}, {plot_metadata['patch_y']}) | "
         f"patch_size={plot_metadata['patch_size']} | "
