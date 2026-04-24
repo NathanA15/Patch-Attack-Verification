@@ -809,6 +809,12 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
     #------ NATHAN start
     model.update()
     print("create_model NumIntVars:", model.NumIntVars, "NumBinVars:", model.NumBinVars, "use_milp:", use_milp, "partial_milp:", partial_milp, "max_milp_neurons:", max_milp_neurons)
+
+    # num_binary_after = presolved_model.NumBinVars
+    # num_int_after = presolved_model.NumIntVars
+    # print("Numbers of variables:")
+    # print(f"Binary variables after presolve: {num_binary_after}")
+    # print(f"Integers variables after presolve: {num_int_after}")
     # ----- NATHAN end
     return counter, var_list, model
 

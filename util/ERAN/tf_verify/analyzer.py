@@ -24,6 +24,8 @@ from ai_milp import milp_callback
 import gc
 import time
 from config import config
+from datetime import datetime
+
 
 
 class layers:
@@ -318,7 +320,20 @@ class Analyzer:
                                 obj += -1 * var_list[counter + adv_label]
                                 model.setObjective(obj, GRB.MINIMIZE)
                                 if self.complete: # Nathan - complete == True
+                                    model.update()
                                     print("Nathan NumIntVars:", model.NumIntVars, "NumBinVars:", model.NumBinVars) # Nathan - because this prints 0 0 then it is not milp, but pure lp
+                                    print("Original model Print stats")
+                                    print(model.printStats())
+
+                                    presolved_model = model.presolve()
+                                    print("Presolved model Print stats")
+                                    print(presolved_model.printStats())
+
+                                    if adv_label == 3:
+                                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+                                        model.write(f"/root/Projects/Nathan/Patch-Attack-Verification/logs/20260424/model_{timestamp}.mps")
+                                        presolved_model.write(f"/root/Projects/Nathan/Patch-Attack-Verification/logs/20260424/presolved_model_{timestamp}.mps")
 
                                     model.optimize(milp_callback) # Nathan - this does the work of milp
 

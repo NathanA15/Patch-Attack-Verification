@@ -45,30 +45,35 @@ RUN_SCHEDULE = [
     # {"upper_bound": 0.75, "timeout_milps": [10, 10, 720000]},
     # {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000]},
 
-    {"upper_bound": 0.80, "timeout_milps": [720000]},
-    {"upper_bound": 0.80, "timeout_milps": [10, 720000]},
-    {"upper_bound": 0.80, "timeout_milps": [10, 10, 720000]},
-    {"upper_bound": 0.80, "timeout_milps": [10, 10, 10, 720000]},
+    # {"upper_bound": 0.80, "timeout_milps": [720000]},
+    # {"upper_bound": 0.80, "timeout_milps": [10, 720000]},
+    # {"upper_bound": 0.80, "timeout_milps": [10, 10, 720000]},
+    # {"upper_bound": 0.80, "timeout_milps": [10, 10, 10, 720000]},
 
     # {"upper_bound": 0.85, "timeout_milps": [720000]},
     # {"upper_bound": 0.85, "timeout_milps": [10, 720000]},
     # {"upper_bound": 0.85, "timeout_milps": [10, 10, 720000]},
     # {"upper_bound": 0.85, "timeout_milps": [10, 10, 10, 720000]},
 
-    {"upper_bound": 0.90, "timeout_milps": [720000]},
-    {"upper_bound": 0.90, "timeout_milps": [10, 720000]},
-    {"upper_bound": 0.90, "timeout_milps": [10, 10, 720000]},
-    {"upper_bound": 0.90, "timeout_milps": [10, 10, 10, 720000]},
+    # {"upper_bound": 0.90, "timeout_milps": [720000]},
+    # {"upper_bound": 0.90, "timeout_milps": [10, 720000]},
+    # {"upper_bound": 0.90, "timeout_milps": [10, 10, 720000]},
+    # {"upper_bound": 0.90, "timeout_milps": [10, 10, 10, 720000]},
 
     # {"upper_bound": 0.95, "timeout_milps": [720000]},
     # {"upper_bound": 0.95, "timeout_milps": [10, 720000]},
     # {"upper_bound": 0.95, "timeout_milps": [10, 10, 720000]},
     # {"upper_bound": 0.95, "timeout_milps": [10, 10, 10, 720000]},
 
-    {"upper_bound": 1.0, "timeout_milps": [720000]},
-    {"upper_bound": 1.0, "timeout_milps": [10, 720000]},
-    {"upper_bound": 1.0, "timeout_milps": [10, 10, 720000]},
-    {"upper_bound": 1.0, "timeout_milps": [10, 10, 10, 720000]},
+    # {"upper_bound": 1.0, "timeout_milps": [720000]},
+    # {"upper_bound": 1.0, "timeout_milps": [10, 720000]},
+    # {"upper_bound": 1.0, "timeout_milps": [10, 10, 720000]},
+    # {"upper_bound": 1.0, "timeout_milps": [10, 10, 10, 720000]},
+    
+    # {"upper_bound": 1.0, "timeout_milps": [10]},
+    # {"upper_bound": 1.0, "timeout_milps": [10, 10]},
+    # {"upper_bound": 1.0, "timeout_milps": [10, 10, 10]},
+    {"upper_bound": 1.0, "timeout_milps": [10, 10, 10, 10]},
 
 ]
 # RUN_SCHEDULE = [
