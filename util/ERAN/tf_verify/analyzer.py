@@ -24,7 +24,6 @@ from ai_milp import milp_callback
 import gc
 import time
 from config import config
-from datetime import datetime
 
 
 
@@ -329,13 +328,15 @@ class Analyzer:
                                     print("Presolved model Print stats")
                                     print(presolved_model.printStats())
 
-                                    if adv_label == 3:
-                                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-                                        model.write(f"/root/Projects/Nathan/Patch-Attack-Verification/logs/20260424/model_{timestamp}.mps")
-                                        presolved_model.write(f"/root/Projects/Nathan/Patch-Attack-Verification/logs/20260424/presolved_model_{timestamp}.mps")
-
                                     model.optimize(milp_callback) # Nathan - this does the work of milp
+
+                                    print(
+                                        f"MIP_FINAL status={model.Status} runtime={model.Runtime:.2f} "
+                                        f"nodes={model.NodeCount} objbound={model.ObjBound} "
+                                        f"solcnt={model.SolCount}",
+                                        flush=True,
+                                    )
+
 
                                     # print("MILP status is ", model.Status) #Shuey Added
                                     print(f"Adv_label: {adv_label}, Status: {model.Status}")

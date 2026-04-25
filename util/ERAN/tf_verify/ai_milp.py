@@ -583,7 +583,7 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
     # model.setParam("MIPFocus", 1) # param for getting solution before timeout
     # model.setParam("NoRelHeurTime", 10)
     # model.setParam("Heuristics", 1)
-    model.setParam("OutputFlag",0)
+    model.setParam("OutputFlag",1)
     model.setParam(GRB.Param.FeasibilityTol, 2e-5)
 
     milp_activation_layers = np.nonzero([l in ["ReLU", "Maxpool"] for l in nn.layertypes])[0]
