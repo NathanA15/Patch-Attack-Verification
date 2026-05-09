@@ -1,3 +1,11 @@
+## Detailed project overview
+
+For a structured explanation of the project, research direction, verification pipeline, and recent implementation upgrades, see:
+
+- [Project_Research_Overview.md](Project_Research_Overview.md)
+
+The notes below are the older chronological working notes.
+
 ## Initial run
 **File:**
  -  patch_attack_verification_log_initial_run_find_which_is_adversarial_and_timeout.csv

@@ -27,6 +27,10 @@ MAX_DEPTH = 4
 TOP_K = 30
 ADD_BOOL_CONSTRAINTS = True
 USE_REFINE_POLY = False
+SKIP_SINGLETON_BOUNDS = False
+ENABLE_SPLIT_BIT_BRANCH_PRIORITY = False # important param !!
+SPLIT_BIT_BRANCH_PRIORITY = 1000
+FIXED_SPLIT_INDICES = None
 SAVE_CSV = True
 CSV_PATH = None
 
@@ -141,6 +145,13 @@ def main():
     print("Batch recursive verification settings")
     print(f"image_index={IMAGE_INDEX} patch=({PATCH_X}, {PATCH_Y}) size={PATCH_SIZE}")
     print(f"max_depth={MAX_DEPTH} top_k={TOP_K}")
+    print(
+        f"skip_singleton_bounds={SKIP_SINGLETON_BOUNDS} "
+        f"enable_split_bit_branch_priority={ENABLE_SPLIT_BIT_BRANCH_PRIORITY} "
+        f"split_bit_branch_priority={SPLIT_BIT_BRANCH_PRIORITY}"
+    )
+    if FIXED_SPLIT_INDICES is not None:
+        print(f"fixed_split_indices={FIXED_SPLIT_INDICES}")
     print(f"run_schedule={run_schedule}")
     if SAVE_CSV:
         print(f"details_csv={runs_csv_path}")
@@ -168,6 +179,10 @@ def main():
             ul=upper_bound,
             add_bool_constraints=ADD_BOOL_CONSTRAINTS,
             use_refine_poly=USE_REFINE_POLY,
+            skip_singleton_bounds=SKIP_SINGLETON_BOUNDS,
+            enable_split_bit_branch_priority=ENABLE_SPLIT_BIT_BRANCH_PRIORITY,
+            split_bit_branch_priority=SPLIT_BIT_BRANCH_PRIORITY,
+            fixed_split_indices=FIXED_SPLIT_INDICES,
             run_id=build_run_id(batch_run_id, upper_bound, timeout_milps, schedule_index),
             runs_csv_path=runs_csv_path,
             save_csv=SAVE_CSV,

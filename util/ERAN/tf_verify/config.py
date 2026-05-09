@@ -91,3 +91,6 @@ class config:
     use_refine_poly=True
     middle_bound=0.5
     bounds=[]
+    skip_singleton_bounds=True
+    enable_split_bit_branch_priority=False
+    split_bit_branch_priority=1000

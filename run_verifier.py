@@ -313,6 +313,9 @@ def build_recursive_timeout_detail_rows(
     add_bool_constraints,
     use_refine_poly,
     middle_bound,
+    skip_singleton_bounds,
+    enable_split_bit_branch_priority,
+    split_bit_branch_priority,
     parent_total_run_time_seconds,
     parent_status,
     parent_attempt_count,
@@ -379,6 +382,10 @@ def build_recursive_timeout_detail_rows(
                     "add_bool_constraints": add_bool_constraints,
                     "use_refine_poly": use_refine_poly,
                     "middle_bound": middle_bound,
+                    "skip_singleton_bounds": skip_singleton_bounds,
+                    "enable_split_bit_branch_priority": enable_split_bit_branch_priority,
+                    "split_bit_branch_priority": split_bit_branch_priority,
+                    "split_indices": attempt_record.get("split_indices", []),
                     "run_scope": run_scope,
                     "global_attempt_index": attempt_record["attempt_index"],
                     "label_attempt_index": label_attempt_index,
@@ -445,6 +452,9 @@ def run_eran(
     use_refine_poly=True,
     middle_bound=0.5,
     bounds=None,
+    skip_singleton_bounds=True,
+    enable_split_bit_branch_priority=False,
+    split_bit_branch_priority=1000,
 ):
     """Run ERAN and return structured verification details from the log.
 
@@ -462,6 +472,9 @@ def run_eran(
         use_refine_poly (bool): Whether to enable refinepoly-specific refinements.
         middle_bound (float): Split point used by the underlying bounds logic.
         bounds (list | None): Optional per-pixel bounds overrides.
+        skip_singleton_bounds (bool): Whether singleton interval selectors are skipped.
+        enable_split_bit_branch_priority (bool): Whether split-bit BranchPriority is enabled.
+        split_bit_branch_priority (int): Gurobi BranchPriority value for split-bit variables.
 
     Raises:
         ValueError: If the log does not contain a RETURN value.
@@ -505,6 +518,12 @@ def run_eran(
         str(middle_bound),
         "--bounds",
         str(bounds if bounds is not None else []),
+        "--skip_singleton_bounds",
+        str(skip_singleton_bounds),
+        "--enable_split_bit_branch_priority",
+        str(enable_split_bit_branch_priority),
+        "--split_bit_branch_priority",
+        str(split_bit_branch_priority),
     ]
 
     start_time = datetime.now()
@@ -623,6 +642,9 @@ def verify_image(
     use_refine_poly=True,
     middle_bound=0.5,
     bounds=None,
+    skip_singleton_bounds=True,
+    enable_split_bit_branch_priority=False,
+    split_bit_branch_priority=1000,
     adv_label=-1,
     return_details=False,
 ):
@@ -642,6 +664,9 @@ def verify_image(
         use_refine_poly (bool, optional): Whether to use refinepoly refinement.
         middle_bound (float, optional): Split point used in bound refinement.
         bounds (list | None, optional): Optional per-pixel bounds overrides.
+        skip_singleton_bounds (bool, optional): Whether singleton interval selectors are skipped.
+        enable_split_bit_branch_priority (bool, optional): Whether split-bit BranchPriority is enabled.
+        split_bit_branch_priority (int, optional): Gurobi BranchPriority value for split-bit variables.
         adv_label (int, optional): Specific adversarial label to target.
         return_details (bool, optional): Whether to return the structured result.
 
@@ -668,6 +693,9 @@ def verify_image(
         use_refine_poly=use_refine_poly,
         middle_bound=middle_bound,
         bounds=bounds,
+        skip_singleton_bounds=skip_singleton_bounds,
+        enable_split_bit_branch_priority=enable_split_bit_branch_priority,
+        split_bit_branch_priority=split_bit_branch_priority,
     )
 
     example = run_details["example"]
@@ -886,11 +914,15 @@ def resolve_timed_out_labels(initial_results, base_bounds, max_depth, choose_pix
 
         while current_result["timed_out"] and depth < max_depth:
             split_indices = choose_pixels_fn(current_result["relaxed_example"], adv_label)
+            print(
+                f"Selected split pixel order for adv_label={adv_label} "
+                f"next_depth={depth + 1}: {split_indices}"
+            )
             state_bounds = subdivide_bounds_at_indices(state_bounds, split_indices)
             depth += 1
             rerun_attempts += 1
 
-            rerun_result = rerun_label_fn(adv_label, state_bounds, depth)
+            rerun_result = rerun_label_fn(adv_label, state_bounds, depth, split_indices)
             rerun_seconds = elapsed_seconds(rerun_result["elapsed_time"])
             rerun_runtime += rerun_seconds
             label_runtime += rerun_seconds
@@ -960,6 +992,10 @@ def verify_image_with_recursive_timeout_refinement(
     add_bool_constraints=True,
     use_refine_poly=False,
     middle_bound=0.5,
+    skip_singleton_bounds=True,
+    enable_split_bit_branch_priority=False,
+    split_bit_branch_priority=1000,
+    fixed_split_indices=None,
     with_plots=False,
     run_id=None,
     runs_csv_path=None,
@@ -983,6 +1019,11 @@ def verify_image_with_recursive_timeout_refinement(
         add_bool_constraints (bool, optional): Whether to add boolean constraints.
         use_refine_poly (bool, optional): Whether to enable refinepoly refinements.
         middle_bound (float, optional): Split point used by ERAN's bounds logic.
+        skip_singleton_bounds (bool, optional): Whether singleton interval selectors are skipped.
+        enable_split_bit_branch_priority (bool, optional): Whether split-bit BranchPriority is enabled.
+        split_bit_branch_priority (int, optional): Gurobi BranchPriority value for split-bit variables.
+        fixed_split_indices (list[int] | None, optional): If set, use this split
+            pixel order at every refinement depth instead of gradient-selected pixels.
         with_plots (bool, optional): Whether to plot returned adversarial examples.
         run_id (str | None, optional): Run identifier used for logs and CSV naming.
         runs_csv_path (str | Path | None, optional): Optional detailed CSV path override.
@@ -1013,6 +1054,14 @@ def verify_image_with_recursive_timeout_refinement(
         f"upper_bound={ul} timeout_schedule={timeout_schedule} "
         f"max_depth={max_depth} top_k={top_k}"
     )
+    print(
+        f"skip_singleton_bounds={skip_singleton_bounds} "
+        f"enable_split_bit_branch_priority={enable_split_bit_branch_priority} "
+        f"split_bit_branch_priority={split_bit_branch_priority}"
+    )
+    if fixed_split_indices is not None:
+        fixed_split_indices = [int(index) for index in fixed_split_indices]
+        print(f"Using fixed split pixel order: {fixed_split_indices}")
     if save_csv:
         print(f"Detailed CSV: {runs_csv_path}")
     print(f"Run log directory: {run_log_dir}")
@@ -1025,7 +1074,7 @@ def verify_image_with_recursive_timeout_refinement(
     max_depth_reached = 0
     attempt_records = []
 
-    def run_for_label(adv_label, bounds, depth):
+    def run_for_label(adv_label, bounds, depth, split_indices=None):
         nonlocal total_runtime, attempt_count, all_log_paths, all_attempt_elapsed_times, attempt_records
         global LOG_FILE
 
@@ -1051,6 +1100,9 @@ def verify_image_with_recursive_timeout_refinement(
                 use_refine_poly=use_refine_poly,
                 middle_bound=middle_bound,
                 bounds=bounds,
+                skip_singleton_bounds=skip_singleton_bounds,
+                enable_split_bit_branch_priority=enable_split_bit_branch_priority,
+                split_bit_branch_priority=split_bit_branch_priority,
                 adv_label=adv_label,
                 return_details=True,
             )
@@ -1070,6 +1122,7 @@ def verify_image_with_recursive_timeout_refinement(
                 "attempt_runtime_seconds": run_seconds,
                 "log_path": Path(result["log_path"]),
                 "result": result,
+                "split_indices": list(split_indices or []),
             }
         )
         return result
@@ -1088,14 +1141,18 @@ def verify_image_with_recursive_timeout_refinement(
         initial_results=initial_label_results,
         base_bounds=base_bounds,
         max_depth=max_depth,
-        choose_pixels_fn=lambda relaxed_example, adv_label: choose_split_pixels(
-            relaxed_example,
-            label_img,
-            adv_label,
-            x_box,
-            y_box,
-            size_box,
-            top_k,
+        choose_pixels_fn=(
+            lambda relaxed_example, adv_label: list(fixed_split_indices)
+            if fixed_split_indices is not None
+            else choose_split_pixels(
+                relaxed_example,
+                label_img,
+                adv_label,
+                x_box,
+                y_box,
+                size_box,
+                top_k,
+            )
         ),
         rerun_label_fn=run_for_label,
     )
@@ -1137,6 +1194,9 @@ def verify_image_with_recursive_timeout_refinement(
         add_bool_constraints=add_bool_constraints,
         use_refine_poly=use_refine_poly,
         middle_bound=middle_bound,
+        skip_singleton_bounds=skip_singleton_bounds,
+        enable_split_bit_branch_priority=enable_split_bit_branch_priority,
+        split_bit_branch_priority=split_bit_branch_priority,
         parent_total_run_time_seconds=round(total_runtime, 6),
         parent_status=overall_status,
         parent_attempt_count=attempt_count,
@@ -1163,6 +1223,10 @@ def verify_image_with_recursive_timeout_refinement(
         "image_index": img_index,
         "label": label_img,
         "upper_bound": ul,
+        "skip_singleton_bounds": skip_singleton_bounds,
+        "enable_split_bit_branch_priority": enable_split_bit_branch_priority,
+        "split_bit_branch_priority": split_bit_branch_priority,
+        "fixed_split_indices": [] if fixed_split_indices is None else list(fixed_split_indices),
         "initial_timeout_labels": initial_timeout_labels,
         "finally_verified_labels": finally_verified_labels,
         "adversarial_labels": adversarial_labels,

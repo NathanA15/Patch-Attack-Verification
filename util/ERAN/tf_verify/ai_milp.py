@@ -634,10 +634,33 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
             expr.addConstant(nn.zonotope[i][0])
             model.addConstr(expr, GRB.EQUAL, 0)
     else:
+        config_source = config_param if config_param is not None else config
+        skip_singleton_bounds = bool(getattr(config_source, "skip_singleton_bounds", True))
+        enable_split_bit_branch_priority = bool(
+            getattr(config_source, "enable_split_bit_branch_priority", False)
+        )
+        split_bit_branch_priority = int(getattr(config_source, "split_bit_branch_priority", 1000) or 0)
+        if enable_split_bit_branch_priority and split_bit_branch_priority <= 0:
+            raise ValueError(
+                f"split_bit_branch_priority must be positive, got {split_bit_branch_priority}."
+            )
+
+        singleton_bounds_skipped = 0
+        split_selector_pixels = 0
+        split_bit_vars_created = 0
+        split_aux_vars_created = 0
+        split_bit_priorities_set = 0
+
         if add_bool_constraints:
             print("Adding boolean constraints for input pixels")
+            print(
+                "Input split selector settings: "
+                f"skip_singleton_bounds={skip_singleton_bounds} "
+                f"enable_split_bit_branch_priority={enable_split_bit_branch_priority} "
+                f"split_bit_branch_priority={split_bit_branch_priority}"
+            )
         # print("bounds list ", config_param.bounds)
-        bounds_config = config_param.bounds
+        bounds_config = config_source.bounds
         bounds_are_per_pixel = (
             isinstance(bounds_config, (list, tuple))
             and len(bounds_config) > 0 # good
@@ -662,6 +685,21 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
                 if not bounds_list:
                     raise ValueError("Bounds list is empty; cannot add boolean constraints.")
                 bounds_len = len(bounds_list)
+
+                if skip_singleton_bounds and bounds_len <= 1:
+                    singleton_bounds_skipped += 1
+                    if bounds_len == 1:
+                        interval_lb, interval_ub = bounds_list[0]
+                        tightened_lb = max(float(LB_N0[i]), float(interval_lb))
+                        tightened_ub = min(float(UB_N0[i]), float(interval_ub))
+                        if tightened_lb > tightened_ub:
+                            raise ValueError(
+                                f"Singleton bounds for pixel {i} are inconsistent with input bounds: "
+                                f"input=[{LB_N0[i]}, {UB_N0[i]}], singleton=[{interval_lb}, {interval_ub}]."
+                            )
+                        var.LB = tightened_lb
+                        var.UB = tightened_ub
+                    continue
                 
                 # 1. Calculate how many bits we need (Log2)
                 # max(2, bounds_len)
@@ -672,6 +710,12 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
                 bin_vars = model.addVars(num_bits, 
                                         vtype=GRB.BINARY, 
                                         name=f"Bit_pixel_{i}")
+                split_selector_pixels += 1
+                split_bit_vars_created += num_bits
+                if enable_split_bit_branch_priority:
+                    for b in range(num_bits):
+                        bin_vars[b].BranchPriority = split_bit_branch_priority
+                        split_bit_priorities_set += 1
                 
                 # 3. Create Auxiliary Continuous Variables (The "Selectors")
                 # These replace your original bool_vars but are CONTINUOUS (easier to solve)
@@ -679,6 +723,7 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
                                         vtype=GRB.CONTINUOUS, 
                                         lb=0.0, ub=1.0, 
                                         name=f"Aux_pixel_{i}")
+                split_aux_vars_created += bounds_len
 
                 # 4. Standard Convex Combination Constraints
                 # Exactly one aux_var will end up being 1.0, others 0.0
@@ -706,6 +751,18 @@ def create_model(nn, LB_N0, UB_N0, nlb, nub, relu_groups, numlayer, use_milp, is
                     var >= sum(aux_vars[j] * bounds_list[j][0] for j in range(bounds_len)),
                     name=f"LB_Constr_{i}"
                 )
+
+        if add_bool_constraints:
+            print(
+                "Input split selector stats: "
+                f"selector_pixels={split_selector_pixels} "
+                f"split_bit_vars={split_bit_vars_created} "
+                f"aux_selector_vars={split_aux_vars_created} "
+                f"singleton_intervals_skipped={singleton_bounds_skipped} "
+                f"branch_priority_enabled={enable_split_bit_branch_priority} "
+                f"branch_priority_value={split_bit_branch_priority} "
+                f"branch_priority_vars={split_bit_priorities_set}"
+            )
 
 
     start_counter = []

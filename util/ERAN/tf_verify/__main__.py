@@ -431,6 +431,9 @@ parser.add_argument("--add_bool_constraints", type=str2bool, default=config.add_
 parser.add_argument("--use_refine_poly", type=str2bool, default=config.use_refine_poly, help="Whether to use refined poly")
 parser.add_argument("--middle_bound", type=float, default=config.middle_bound, help="Middle bound value in milp verifier")
 parser.add_argument("--bounds", type=json.loads, default=config.bounds, help="bounds for milp verifier")
+parser.add_argument("--skip_singleton_bounds", type=str2bool, default=config.skip_singleton_bounds, help="Skip singleton input selector constraints")
+parser.add_argument("--enable_split_bit_branch_priority", type=str2bool, default=config.enable_split_bit_branch_priority, help="Enable BranchPriority on split-bit variables")
+parser.add_argument("--split_bit_branch_priority", type=int, default=config.split_bit_branch_priority, help="BranchPriority value for split-bit variables when enabled")
 
 
 # Logging options
