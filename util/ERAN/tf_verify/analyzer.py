@@ -325,12 +325,16 @@ class Analyzer:
                                 if self.complete: # Nathan - complete == True
                                     model.update()
                                     print("Nathan NumIntVars:", model.NumIntVars, "NumBinVars:", model.NumBinVars) # Nathan - because this prints 0 0 then it is not milp, but pure lp
-                                    print("Original model Print stats")
-                                    print(model.printStats())
+
+                                    print(f"START printStats Regular adv_label={adv_label}")
+                                    model.printStats()
+                                    print(f"END printStats Regular adv_label={adv_label}")
+
 
                                     presolved_model = model.presolve()
-                                    print("Presolved model Print stats")
-                                    print(presolved_model.printStats())
+                                    print(f"START printStats Presolved adv_label={adv_label}")
+                                    presolved_model.printStats()
+                                    print(f"END printStats Presolved adv_label={adv_label}")
 
                                     model.optimize(milp_callback) # Nathan - this does the work of milp
 

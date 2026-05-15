@@ -8,7 +8,7 @@ from gurobipy import GRB
 from config import CSV_DIR, LOG_DIR
 
 
-RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS = [
+BASE_RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS = [
     "image_index",
     "true_label",
     "adv_label",
@@ -42,6 +42,85 @@ RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS = [
     "parent_max_depth_reached",
     "log_path",
 ]
+
+
+RUN_CONFIG_COLUMNS = [
+    "top_k",
+    "split_selection_mode",
+    "split_random_seed",
+]
+
+
+GUROBI_STATS_COLUMNS = [
+    "linear_constraint_matrix_constrs",
+    "linear_constraint_matrix_vars",
+    "linear_constraint_matrix_nzs",
+    "variable_types_continuous",
+    "variable_types_integer",
+    "variable_types_binary",
+    "general_constraints",
+    "matrix_coefficient_range",
+    "objective_coefficient_range",
+    "variable_bound_range",
+    "rhs_coefficient_range",
+    "linear_constraint_matrix_constrs_presolved",
+    "linear_constraint_matrix_vars_presolved",
+    "linear_constraint_matrix_nzs_presolved",
+    "variable_types_continuous_presolved",
+    "variable_types_integer_presolved",
+    "variable_types_binary_presolved",
+    "general_constraints_presolved",
+    "matrix_coefficient_range_presolved",
+    "objective_coefficient_range_presolved",
+    "variable_bound_range_presolved",
+    "rhs_coefficient_range_presolved",
+    "optimizer_presolve_removed_rows",
+    "optimizer_presolve_removed_columns",
+    "optimizer_presolve_removed_steps",
+    "optimizer_presolve_time_seconds",
+    "optimizer_presolved_rows",
+    "optimizer_presolved_columns",
+    "optimizer_presolved_nonzeros",
+    "optimizer_presolved_variable_types_continuous",
+    "optimizer_presolved_variable_types_integer",
+    "optimizer_presolved_variable_types_binary",
+    "extra_simplex_iterations_after_uncrush",
+    "extra_simplex_iterations_dual_to_original",
+    "root_relaxation_result",
+    "root_relaxation_objective",
+    "root_relaxation_iterations",
+    "root_relaxation_seconds",
+    "explored_nodes",
+    "explored_simplex_iterations",
+    "explored_time_seconds",
+    "mip_final_status",
+    "mip_final_runtime_seconds",
+    "mip_final_nodes",
+    "mip_final_objbound",
+    "mip_final_solcnt",
+    "relaxed_presolve_removed_rows",
+    "relaxed_presolve_removed_columns",
+    "relaxed_presolve_removed_steps",
+    "relaxed_presolve_time_seconds",
+    "relaxed_presolved_rows",
+    "relaxed_presolved_columns",
+    "relaxed_presolved_nonzeros",
+    "relaxed_presolved_variable_types_continuous",
+    "relaxed_presolved_variable_types_integer",
+    "relaxed_presolved_variable_types_binary",
+    "relaxed_extra_simplex_iterations_after_uncrush",
+    "relaxed_extra_simplex_iterations_dual_to_original",
+    "relaxed_barrier_solved_iterations",
+    "relaxed_barrier_solved_seconds",
+    "relaxed_solved_iterations",
+    "relaxed_solved_seconds",
+    "relaxed_optimal_objective",
+]
+
+
+RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS = (
+    BASE_RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS + RUN_CONFIG_COLUMNS + GUROBI_STATS_COLUMNS
+)
 
 
 def dump_callback_codes():
@@ -143,6 +222,58 @@ def ensure_trailing_newline(path):
                 out_handle.write(b"\n")
 
 
+def validate_recursive_timeout_header(header, csv_path):
+    """
+    Ensure an existing CSV uses the recursive timeout refinement base schema.
+    """
+    if not header:
+        return
+
+    base_len = len(BASE_RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS)
+    if header[:base_len] != BASE_RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS:
+        raise ValueError(
+            f"Existing CSV header at {csv_path} does not match the recursive timeout "
+            "refinement base schema. Use a new --csv-path or migrate the existing CSV first."
+        )
+
+
+def build_dynamic_csv_header(existing_header, row):
+    """
+    Preserve base columns first, then append known and newly discovered stats.
+    """
+    if not existing_header:
+        header = list(RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS)
+    else:
+        header = list(BASE_RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS)
+        for column in RUN_CONFIG_COLUMNS:
+            if column not in header:
+                header.append(column)
+        for column in existing_header[len(BASE_RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS) :]:
+            if column not in header:
+                header.append(column)
+
+    for column in RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS:
+        if column not in header:
+            header.append(column)
+
+    for column in sorted(row.keys()):
+        if column not in header:
+            header.append(column)
+
+    return header
+
+
+def rewrite_csv_with_header(csv_path, header, existing_rows):
+    """
+    Rewrite a CSV after adding new dynamic columns.
+    """
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=header)
+        writer.writeheader()
+        for existing_row in existing_rows:
+            writer.writerow({column: existing_row.get(column, "") for column in header})
+
+
 def append_run_row(csv_path, row, save_csv=True):
     """
     Append one detailed row for a recursive timeout refinement run.
@@ -152,23 +283,28 @@ def append_run_row(csv_path, row, save_csv=True):
 
     csv_path = Path(csv_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
-    file_exists = csv_path.exists()
-    if file_exists:
+    has_content = csv_path.exists() and csv_path.stat().st_size > 0
+    existing_rows = []
+    existing_header = []
+
+    if has_content:
         with csv_path.open("r", newline="", encoding="utf-8") as handle:
-            reader = csv.reader(handle)
-            existing_header = next(reader, [])
-        if existing_header and existing_header != RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS:
-            raise ValueError(
-                f"Existing CSV header at {csv_path} does not match the current recursive timeout "
-                "refinement schema. Use a new --csv-path or migrate the existing CSV first."
-            )
+            reader = csv.DictReader(handle)
+            existing_header = reader.fieldnames or []
+            existing_rows = list(reader)
+        validate_recursive_timeout_header(existing_header, csv_path)
+
+    header = build_dynamic_csv_header(existing_header, row)
+    if has_content and header != existing_header:
+        rewrite_csv_with_header(csv_path, header, existing_rows)
+    elif has_content:
         ensure_trailing_newline(csv_path)
 
     with csv_path.open("a", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
-        if not file_exists:
-            writer.writerow(RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS)
-        writer.writerow([row.get(col, "") for col in RECURSIVE_TIMEOUT_REFINEMENT_COLUMNS])
+        writer = csv.DictWriter(handle, fieldnames=header)
+        if not has_content:
+            writer.writeheader()
+        writer.writerow({column: row.get(column, "") for column in header})
 
 
 def elapsed_seconds(elapsed_time):

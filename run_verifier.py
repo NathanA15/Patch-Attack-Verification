@@ -266,6 +266,368 @@ def parse_block_local_runtime_seconds(block_text):
     return None, "initial_label_local_missing"
 
 
+def normalize_stat_column_name(name):
+    """Normalize a Gurobi stat label into a CSV-safe suffix."""
+
+    normalized = name.lower().replace("'", "")
+    normalized = re.sub(r"[^a-z0-9]+", "_", normalized)
+    return normalized.strip("_")
+
+
+def parse_numeric_text(value):
+    """Parse simple numeric text while preserving non-numeric Gurobi payloads."""
+
+    if value is None:
+        return None
+
+    raw = str(value).strip()
+    if raw == "":
+        return ""
+    if re.fullmatch(r"[-+]?\d+", raw):
+        return int(raw)
+    try:
+        return float(raw)
+    except ValueError:
+        return raw
+
+
+def parse_printstats_section(section_text, suffix=""):
+    """Parse one marker-delimited model.printStats() section."""
+
+    stats = {}
+
+    for line in section_text.splitlines():
+        stripped = line.strip()
+
+        match = re.match(
+            r"Linear constraint matrix\s*:\s*(\d+)\s+Constrs,\s*(\d+)\s+Vars,\s*(\d+)\s+NZs",
+            stripped,
+            re.IGNORECASE,
+        )
+        if match:
+            stats["linear_constraint_matrix_constrs" + suffix] = int(match.group(1))
+            stats["linear_constraint_matrix_vars" + suffix] = int(match.group(2))
+            stats["linear_constraint_matrix_nzs" + suffix] = int(match.group(3))
+            continue
+
+        match = re.match(
+            r"Variable types\s*:\s*(\d+)\s+Continuous,\s*(\d+)\s+Integer\s*\((\d+)\s+Binary\)",
+            stripped,
+            re.IGNORECASE,
+        )
+        if match:
+            stats["variable_types_continuous" + suffix] = int(match.group(1))
+            stats["variable_types_integer" + suffix] = int(match.group(2))
+            stats["variable_types_binary" + suffix] = int(match.group(3))
+            continue
+
+        match = re.match(r"General constraints\s*:\s*(\d+)\s+Constrs", stripped, re.IGNORECASE)
+        if match:
+            stats["general_constraints" + suffix] = int(match.group(1))
+            continue
+
+        match = re.match(r"Matrix coefficient range\s*:\s*(.+)", stripped, re.IGNORECASE)
+        if match:
+            stats["matrix_coefficient_range" + suffix] = match.group(1).strip()
+            continue
+
+        match = re.match(r"Objective coefficient range\s*:\s*(.+)", stripped, re.IGNORECASE)
+        if match:
+            stats["objective_coefficient_range" + suffix] = match.group(1).strip()
+            continue
+
+        match = re.match(r"Variable bound range\s*:\s*(.+)", stripped, re.IGNORECASE)
+        if match:
+            stats["variable_bound_range" + suffix] = match.group(1).strip()
+            continue
+
+        match = re.match(r"RHS coefficient range\s*:\s*(.+)", stripped, re.IGNORECASE)
+        if match:
+            stats["rhs_coefficient_range" + suffix] = match.group(1).strip()
+
+    return stats
+
+
+def extract_marked_printstats_section(block_text, stats_kind, adv_label):
+    """Return the analyzer marker-delimited printStats text for one adv_label."""
+
+    marker_pattern = (
+        r"START printStats %s adv_label=%d\s*(.*?)\s*END printStats %s adv_label=%d"
+        % (stats_kind, adv_label, stats_kind, adv_label)
+    )
+    match = re.search(marker_pattern, block_text, re.DOTALL)
+    return match.group(1) if match else ""
+
+
+def parse_marked_printstats(block_text, adv_label):
+    """Parse only the current analyzer START/END printStats markers."""
+
+    stats = {}
+
+    regular_section = extract_marked_printstats_section(block_text, "Regular", adv_label)
+    if regular_section:
+        stats.update(parse_printstats_section(regular_section))
+
+    presolved_section = extract_marked_printstats_section(block_text, "Presolved", adv_label)
+    if presolved_section:
+        stats.update(parse_printstats_section(presolved_section, "_presolved"))
+
+    return stats
+
+
+def extract_optimizer_text(text):
+    """Return text from the first Gurobi optimizer banner onward."""
+
+    start = text.find("Gurobi Optimizer version")
+    if start == -1:
+        return text
+    return text[start:]
+
+
+def parse_presolve_stats(text, prefix):
+    """Parse Gurobi presolve removal, time, and final presolved model size."""
+
+    stats = {}
+
+    removed_matches = re.findall(
+        r"Presolve removed\s+(\d+)\s+rows and\s+(\d+)\s+columns",
+        text,
+        re.IGNORECASE,
+    )
+    if removed_matches:
+        steps = [(int(rows), int(columns)) for rows, columns in removed_matches]
+        if len(steps) == 1:
+            stats[prefix + "presolve_removed_rows"] = steps[0][0]
+            stats[prefix + "presolve_removed_columns"] = steps[0][1]
+        else:
+            stats[prefix + "presolve_removed_steps"] = steps
+
+    presolve_times = re.findall(
+        r"Presolve time:\s*([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)s",
+        text,
+        re.IGNORECASE,
+    )
+    if presolve_times:
+        stats[prefix + "presolve_time_seconds"] = float(presolve_times[-1])
+
+    match = re.search(
+        r"Presolved:\s*(\d+)\s+rows,\s*(\d+)\s+columns,\s*(\d+)\s+nonzeros",
+        text,
+        re.IGNORECASE,
+    )
+    if match:
+        stats[prefix + "presolved_rows"] = int(match.group(1))
+        stats[prefix + "presolved_columns"] = int(match.group(2))
+        stats[prefix + "presolved_nonzeros"] = int(match.group(3))
+
+    match = re.search(
+        r"Presolved:.*?\nVariable types:\s*(\d+)\s+continuous,\s*(\d+)\s+integer\s*\((\d+)\s+binary\)",
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if match:
+        stats[prefix + "presolved_variable_types_continuous"] = int(match.group(1))
+        stats[prefix + "presolved_variable_types_integer"] = int(match.group(2))
+        stats[prefix + "presolved_variable_types_binary"] = int(match.group(3))
+
+    return stats
+
+
+def parse_extra_simplex_stats(text, prefix=""):
+    """Parse Gurobi extra simplex iteration counters."""
+
+    stats = {}
+
+    matches = re.findall(r"Extra simplex iterations after uncrush:\s*(\d+)", text)
+    if matches:
+        stats[prefix + "extra_simplex_iterations_after_uncrush"] = int(matches[-1])
+
+    matches = re.findall(r"Extra simplex iterations from dual to original model:\s*(\d+)", text)
+    if matches:
+        stats[prefix + "extra_simplex_iterations_dual_to_original"] = int(matches[-1])
+
+    return stats
+
+
+def parse_root_relaxation_stats(text):
+    """Parse the main MIP root relaxation line."""
+
+    stats = {}
+
+    match = re.search(
+        r"Root relaxation:\s*(objective\s+([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)|cutoff),\s*(\d+)\s+iterations,\s*([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)\s+seconds",
+        text,
+        re.IGNORECASE,
+    )
+    if not match:
+        return stats
+
+    result_text = match.group(1)
+    stats["root_relaxation_result"] = "objective" if result_text.lower().startswith("objective") else "cutoff"
+    if match.group(2) is not None:
+        stats["root_relaxation_objective"] = match.group(2)
+    stats["root_relaxation_iterations"] = int(match.group(3))
+    stats["root_relaxation_seconds"] = float(match.group(4))
+    return stats
+
+
+def parse_cutting_plane_stats(text):
+    """Parse a Gurobi Cutting planes block into dynamic CSV columns."""
+
+    stats = {}
+    in_block = False
+
+    for line in text.splitlines():
+        if line.strip() == "Cutting planes:":
+            in_block = True
+            continue
+        if not in_block:
+            continue
+        if not line.strip():
+            break
+
+        match = re.match(r"\s+(.+?):\s*(.+?)\s*$", line)
+        if not match:
+            break
+        column = "cutting_planes_" + normalize_stat_column_name(match.group(1))
+        stats[column] = parse_numeric_text(match.group(2))
+
+    return stats
+
+
+def parse_explored_nodes_stats(text):
+    """Parse the final Gurobi explored-node summary."""
+
+    stats = {}
+
+    matches = re.findall(
+        r"Explored\s+(\d+)\s+nodes\s+\((\d+)\s+simplex iterations\)\s+in\s+([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)\s+seconds",
+        text,
+        re.IGNORECASE,
+    )
+    if matches:
+        nodes, simplex_iterations, seconds = matches[-1]
+        stats["explored_nodes"] = int(nodes)
+        stats["explored_simplex_iterations"] = int(simplex_iterations)
+        stats["explored_time_seconds"] = float(seconds)
+
+    return stats
+
+
+def parse_mip_final_stats(text):
+    """Parse the explicit MIP_FINAL line emitted by analyzer.py."""
+
+    stats = {}
+
+    match = re.search(
+        r"MIP_FINAL\s+status=(\S+)\s+runtime=(\S+)\s+nodes=(\S+)\s+objbound=(\S+)\s+solcnt=(\S+)",
+        text,
+    )
+    if not match:
+        return stats
+
+    stats["mip_final_status"] = parse_numeric_text(match.group(1))
+    stats["mip_final_runtime_seconds"] = parse_numeric_text(match.group(2))
+    stats["mip_final_nodes"] = parse_numeric_text(match.group(3))
+    stats["mip_final_objbound"] = parse_numeric_text(match.group(4))
+    stats["mip_final_solcnt"] = parse_numeric_text(match.group(5))
+    return stats
+
+
+def parse_barrier_stats(text, prefix):
+    """Parse relaxed LP barrier statistics."""
+
+    stats = {}
+    in_block = False
+
+    for line in text.splitlines():
+        if line.strip() == "Barrier statistics:":
+            in_block = True
+            continue
+        if not in_block:
+            continue
+        if not line.strip():
+            break
+
+        match = re.match(r"\s*([^:]+?)\s*:\s*(.+?)\s*$", line)
+        if not match:
+            break
+        column = prefix + "barrier_" + normalize_stat_column_name(match.group(1))
+        stats[column] = parse_numeric_text(match.group(2))
+
+    match = re.search(
+        r"Barrier solved model in\s+(\d+)\s+iterations and\s+([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)\s+seconds",
+        text,
+        re.IGNORECASE,
+    )
+    if match:
+        stats[prefix + "barrier_solved_iterations"] = int(match.group(1))
+        stats[prefix + "barrier_solved_seconds"] = float(match.group(2))
+
+    return stats
+
+
+def parse_relaxed_solve_stats(text):
+    """Parse the relaxed fallback Gurobi solve after timeout."""
+
+    stats = {}
+    relaxed_text = extract_optimizer_text(text)
+
+    stats.update(parse_presolve_stats(relaxed_text, "relaxed_"))
+    stats.update(parse_extra_simplex_stats(relaxed_text, "relaxed_"))
+    stats.update(parse_barrier_stats(relaxed_text, "relaxed_"))
+
+    match = re.search(
+        r"Solved in\s+(\d+)\s+iterations and\s+([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)\s+seconds",
+        relaxed_text,
+        re.IGNORECASE,
+    )
+    if match:
+        stats["relaxed_solved_iterations"] = int(match.group(1))
+        stats["relaxed_solved_seconds"] = float(match.group(2))
+
+    optimal_objectives = re.findall(
+        r"Optimal objective\s+([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)",
+        relaxed_text,
+        re.IGNORECASE,
+    )
+    if optimal_objectives:
+        stats["relaxed_optimal_objective"] = optimal_objectives[-1]
+
+    return stats
+
+
+def parse_main_solve_stats(block_text):
+    """Parse the main MIP solve statistics from one label block."""
+
+    main_text = block_text.split("No solution found, running relaxed model", 1)[0]
+    optimizer_text = extract_optimizer_text(main_text)
+    stats = {}
+
+    stats.update(parse_presolve_stats(optimizer_text, "optimizer_"))
+    stats.update(parse_extra_simplex_stats(optimizer_text))
+    stats.update(parse_root_relaxation_stats(optimizer_text))
+    stats.update(parse_cutting_plane_stats(optimizer_text))
+    stats.update(parse_explored_nodes_stats(optimizer_text))
+    stats.update(parse_mip_final_stats(optimizer_text))
+
+    return stats
+
+
+def parse_gurobi_stats_from_block(block_text, adv_label):
+    """Parse printStats, MIP solve, and relaxed fallback stats for one adv_label."""
+
+    stats = {}
+    stats.update(parse_marked_printstats(block_text, adv_label))
+    stats.update(parse_main_solve_stats(block_text))
+
+    if "No solution found, running relaxed model" in block_text:
+        relaxed_text = block_text.split("No solution found, running relaxed model", 1)[1]
+        stats.update(parse_relaxed_solve_stats(relaxed_text))
+
+    return stats
+
+
 def classify_attempt_final_outcome(label_result):
     """Classify one per-label attempt outcome for detailed CSV rows."""
 
@@ -301,6 +663,18 @@ def resolve_timeout_milp_for_depth(timeout_schedule, depth):
     return float(timeout_schedule[index])
 
 
+def normalize_split_selection_mode(split_selection_mode):
+    """Normalize and validate the split pixel selection mode."""
+
+    mode = str(split_selection_mode).strip().lower()
+    valid_modes = {"max", "min", "random"}
+    if mode not in valid_modes:
+        raise ValueError(
+            f"split_selection_mode must be one of {sorted(valid_modes)}, got {split_selection_mode!r}."
+        )
+    return mode
+
+
 def build_recursive_timeout_detail_rows(
     *,
     attempt_records,
@@ -316,6 +690,9 @@ def build_recursive_timeout_detail_rows(
     skip_singleton_bounds,
     enable_split_bit_branch_priority,
     split_bit_branch_priority,
+    top_k,
+    split_selection_mode,
+    split_random_seed,
     parent_total_run_time_seconds,
     parent_status,
     parent_attempt_count,
@@ -335,7 +712,7 @@ def build_recursive_timeout_detail_rows(
         }
 
         if attempt_record["attempt_index"] == 0:
-            run_scope = "initial_all_labels"
+            run_scope = "initial_all_labels" if attempt_record["adv_label"] == -1 else "initial_single_label"
         else:
             run_scope = "single_label_rerun"
             if len(block_infos) != 1:
@@ -369,42 +746,45 @@ def build_recursive_timeout_detail_rows(
             is_timeout = final_outcome == "timeout" or status_code == MILP_STATUS["TIME_LIMIT"]
             is_adversarial_found = final_outcome == "adversarial"
 
-            rows.append(
-                {
-                    "image_index": img_index,
-                    "true_label": true_label,
-                    "adv_label": adv_label,
-                    "patch_x": x_box,
-                    "patch_y": y_box,
-                    "patch_size": size_box,
-                    "upper_bound": ul,
-                    "timeout_milp_s": attempt_record["effective_timeout"],
-                    "add_bool_constraints": add_bool_constraints,
-                    "use_refine_poly": use_refine_poly,
-                    "middle_bound": middle_bound,
-                    "skip_singleton_bounds": skip_singleton_bounds,
-                    "enable_split_bit_branch_priority": enable_split_bit_branch_priority,
-                    "split_bit_branch_priority": split_bit_branch_priority,
-                    "split_indices": attempt_record.get("split_indices", []),
-                    "run_scope": run_scope,
-                    "global_attempt_index": attempt_record["attempt_index"],
-                    "label_attempt_index": label_attempt_index,
-                    "current_depth": current_depth,
-                    "status_code": status_code,
-                    "status_name": format_milp_status(status_code),
-                    "final_outcome": final_outcome,
-                    "is_timeout": is_timeout,
-                    "is_adversarial_found": is_adversarial_found,
-                    "iteration_runtime_seconds": iteration_runtime_seconds,
-                    "iteration_runtime_source": runtime_source,
-                    "attempt_runtime_seconds": attempt_record["attempt_runtime_seconds"],
-                    "parent_total_run_time_seconds": parent_total_run_time_seconds,
-                    "parent_status": parent_status,
-                    "parent_attempt_count": parent_attempt_count,
-                    "parent_max_depth_reached": parent_max_depth_reached,
-                    "log_path": str(attempt_record["log_path"]),
-                }
-            )
+            row = {
+                "image_index": img_index,
+                "true_label": true_label,
+                "adv_label": adv_label,
+                "patch_x": x_box,
+                "patch_y": y_box,
+                "patch_size": size_box,
+                "upper_bound": ul,
+                "timeout_milp_s": attempt_record["effective_timeout"],
+                "add_bool_constraints": add_bool_constraints,
+                "use_refine_poly": use_refine_poly,
+                "middle_bound": middle_bound,
+                "skip_singleton_bounds": skip_singleton_bounds,
+                "enable_split_bit_branch_priority": enable_split_bit_branch_priority,
+                "split_bit_branch_priority": split_bit_branch_priority,
+                "top_k": top_k,
+                "split_selection_mode": split_selection_mode,
+                "split_random_seed": "" if split_random_seed is None else split_random_seed,
+                "split_indices": attempt_record.get("split_indices", []),
+                "run_scope": run_scope,
+                "global_attempt_index": attempt_record["attempt_index"],
+                "label_attempt_index": label_attempt_index,
+                "current_depth": current_depth,
+                "status_code": status_code,
+                "status_name": format_milp_status(status_code),
+                "final_outcome": final_outcome,
+                "is_timeout": is_timeout,
+                "is_adversarial_found": is_adversarial_found,
+                "iteration_runtime_seconds": iteration_runtime_seconds,
+                "iteration_runtime_source": runtime_source,
+                "attempt_runtime_seconds": attempt_record["attempt_runtime_seconds"],
+                "parent_total_run_time_seconds": parent_total_run_time_seconds,
+                "parent_status": parent_status,
+                "parent_attempt_count": parent_attempt_count,
+                "parent_max_depth_reached": parent_max_depth_reached,
+                "log_path": str(attempt_record["log_path"]),
+            }
+            row.update(parse_gurobi_stats_from_block(str(block_info["block_text"]), adv_label))
+            rows.append(row)
 
     return rows
 
@@ -793,6 +1173,22 @@ def get_pixel_influence(model_source, input_image, correct_class_idx, target_cla
     return input_tensor.grad.detach()
 
 
+def get_patch_pixel_indices(patch_x=0, patch_y=0, patch_size=10, img_w=28, img_h=28):
+    """Return flattened pixel indices inside the configured patch."""
+
+    indices = []
+    y_start = max(0, patch_y)
+    y_end = min(img_h, patch_y + patch_size)
+    x_start = max(0, patch_x)
+    x_end = min(img_w, patch_x + patch_size)
+
+    for row in range(y_start, y_end):
+        for col in range(x_start, x_end):
+            indices.append(row * img_w + col)
+
+    return indices
+
+
 def get_top_k_pixels_in_patch(
     influence_map,
     k=30,
@@ -801,28 +1197,77 @@ def get_top_k_pixels_in_patch(
     patch_size=10,
     img_w=28,
     img_h=28,
+    split_selection_mode="max",
 ):
-    """Select the most influential flattened pixel indices within the patch."""
+    """Select flattened patch pixel indices by raw gradient ordering."""
+
+    mode = normalize_split_selection_mode(split_selection_mode)
+    if mode == "random":
+        raise ValueError("Use get_random_k_pixels_in_patch for random split selection.")
+
+    k = int(k)
+    if k < 0:
+        raise ValueError(f"k must be non-negative, got {k}.")
 
     grad_2d = influence_map.view(img_h, img_w)
     candidates = []
 
-    y_start = max(0, patch_y)
-    y_end = min(img_h, patch_y + patch_size)
-    x_start = max(0, patch_x)
-    x_end = min(img_w, patch_x + patch_size)
+    for pixel_index in get_patch_pixel_indices(patch_x, patch_y, patch_size, img_w, img_h):
+        row = pixel_index // img_w
+        col = pixel_index % img_w
+        candidates.append((grad_2d[row, col].item(), pixel_index))
 
-    for row in range(y_start, y_end):
-        for col in range(x_start, x_end):
-            candidates.append((grad_2d[row, col].item(), row * img_w + col))
-
-    candidates.sort(key=lambda item: item[0], reverse=True)
+    candidates.sort(key=lambda item: item[0], reverse=(mode == "max"))
     top_k = candidates[:k]
     return [item[1] for item in top_k]
 
 
-def choose_split_pixels(relaxed_example, label_img, adv_label, patch_x, patch_y, patch_size, top_k):
-    """Choose the patch pixels to split next using gradient magnitude."""
+def get_random_k_pixels_in_patch(
+    k=30,
+    patch_x=0,
+    patch_y=0,
+    patch_size=10,
+    img_w=28,
+    img_h=28,
+    random_generator=None,
+):
+    """Select random unique flattened patch pixel indices."""
+
+    candidates = get_patch_pixel_indices(patch_x, patch_y, patch_size, img_w, img_h)
+    k = int(k)
+    if k < 0:
+        raise ValueError(f"k must be non-negative, got {k}.")
+    sample_size = min(int(k), len(candidates))
+    rng = random_generator or random
+    return rng.sample(candidates, sample_size)
+
+
+def choose_split_pixels(
+    relaxed_example,
+    label_img,
+    adv_label,
+    patch_x,
+    patch_y,
+    patch_size,
+    top_k,
+    split_selection_mode="max",
+    random_generator=None,
+):
+    """Choose the patch pixels to split next."""
+
+    mode = normalize_split_selection_mode(split_selection_mode)
+    top_k = int(top_k)
+    if top_k < 0:
+        raise ValueError(f"top_k must be non-negative, got {top_k}.")
+
+    if mode == "random":
+        return get_random_k_pixels_in_patch(
+            k=top_k,
+            patch_x=patch_x,
+            patch_y=patch_y,
+            patch_size=patch_size,
+            random_generator=random_generator,
+        )
 
     if relaxed_example is None:
         raise ValueError(f"Cannot refine label {adv_label}: relaxed example missing from log")
@@ -839,6 +1284,7 @@ def choose_split_pixels(relaxed_example, label_img, adv_label, patch_x, patch_y,
         patch_x=patch_x,
         patch_y=patch_y,
         patch_size=patch_size,
+        split_selection_mode=mode,
     )
 
 
@@ -988,6 +1434,8 @@ def verify_image_with_recursive_timeout_refinement(
     timeout_milp=27,
     max_depth=2,
     top_k=30,
+    split_selection_mode="max",
+    split_random_seed=None,
     ul=0.65,
     add_bool_constraints=True,
     use_refine_poly=False,
@@ -997,6 +1445,7 @@ def verify_image_with_recursive_timeout_refinement(
     split_bit_branch_priority=1000,
     fixed_split_indices=None,
     with_plots=False,
+    adv_label=-1,
     run_id=None,
     runs_csv_path=None,
     run_log_dir=None,
@@ -1014,7 +1463,9 @@ def verify_image_with_recursive_timeout_refinement(
         timeout_milp (int | float | list[float], optional): MILP timeout per
             ERAN call, or a per-depth timeout schedule.
         max_depth (int, optional): Maximum number of recursive split reruns.
-        top_k (int, optional): Number of top-gradient patch pixels to split each rerun.
+        top_k (int, optional): Number of patch pixels to split each rerun.
+        split_selection_mode (str, optional): Pixel selection mode: `max`, `min`, or `random`.
+        split_random_seed (int | None, optional): Optional seed for random split selection.
         ul (float, optional): Upper bound for patch pixels.
         add_bool_constraints (bool, optional): Whether to add boolean constraints.
         use_refine_poly (bool, optional): Whether to enable refinepoly refinements.
@@ -1025,6 +1476,8 @@ def verify_image_with_recursive_timeout_refinement(
         fixed_split_indices (list[int] | None, optional): If set, use this split
             pixel order at every refinement depth instead of gradient-selected pixels.
         with_plots (bool, optional): Whether to plot returned adversarial examples.
+        adv_label (int, optional): Specific adversarial label to target, or `-1`
+            to verify all adversarial labels.
         run_id (str | None, optional): Run identifier used for logs and CSV naming.
         runs_csv_path (str | Path | None, optional): Optional detailed CSV path override.
         run_log_dir (str | Path | None, optional): Optional per-run log directory override.
@@ -1036,6 +1489,12 @@ def verify_image_with_recursive_timeout_refinement(
 
     run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
     timeout_schedule = normalize_timeout_milp_schedule(timeout_milp)
+    top_k = int(top_k)
+    if top_k < 0:
+        raise ValueError(f"top_k must be non-negative, got {top_k}.")
+    split_selection_mode = normalize_split_selection_mode(split_selection_mode)
+    split_random_seed = None if split_random_seed is None else int(split_random_seed)
+    adv_label = int(adv_label)
     runs_csv_path = resolve_runs_csv_path(runs_csv_path, run_id)
     if run_log_dir is None:
         run_log_dir = build_run_log_dir(run_id)
@@ -1052,7 +1511,9 @@ def verify_image_with_recursive_timeout_refinement(
     )
     print(
         f"upper_bound={ul} timeout_schedule={timeout_schedule} "
-        f"max_depth={max_depth} top_k={top_k}"
+        f"max_depth={max_depth} top_k={top_k} "
+        f"split_selection_mode={split_selection_mode} "
+        f"split_random_seed={split_random_seed} adv_label={adv_label}"
     )
     print(
         f"skip_singleton_bounds={skip_singleton_bounds} "
@@ -1062,6 +1523,8 @@ def verify_image_with_recursive_timeout_refinement(
     if fixed_split_indices is not None:
         fixed_split_indices = [int(index) for index in fixed_split_indices]
         print(f"Using fixed split pixel order: {fixed_split_indices}")
+    effective_split_selection_mode = "fixed" if fixed_split_indices is not None else split_selection_mode
+    split_random_generator = random.Random(split_random_seed) if split_random_seed is not None else random.Random()
     if save_csv:
         print(f"Detailed CSV: {runs_csv_path}")
     print(f"Run log directory: {run_log_dir}")
@@ -1127,7 +1590,7 @@ def verify_image_with_recursive_timeout_refinement(
         )
         return result
 
-    initial_result = run_for_label(-1, base_bounds, 0)
+    initial_result = run_for_label(adv_label, base_bounds, 0)
     initial_label_results = initial_result["label_results"]
     initial_timeout_labels = sorted(
         int(label_result["adv_label"])
@@ -1152,6 +1615,8 @@ def verify_image_with_recursive_timeout_refinement(
                 y_box,
                 size_box,
                 top_k,
+                split_selection_mode,
+                split_random_generator,
             )
         ),
         rerun_label_fn=run_for_label,
@@ -1197,6 +1662,9 @@ def verify_image_with_recursive_timeout_refinement(
         skip_singleton_bounds=skip_singleton_bounds,
         enable_split_bit_branch_priority=enable_split_bit_branch_priority,
         split_bit_branch_priority=split_bit_branch_priority,
+        top_k=top_k,
+        split_selection_mode=effective_split_selection_mode,
+        split_random_seed=split_random_seed,
         parent_total_run_time_seconds=round(total_runtime, 6),
         parent_status=overall_status,
         parent_attempt_count=attempt_count,
@@ -1223,6 +1691,10 @@ def verify_image_with_recursive_timeout_refinement(
         "image_index": img_index,
         "label": label_img,
         "upper_bound": ul,
+        "adv_label": adv_label,
+        "top_k": top_k,
+        "split_selection_mode": effective_split_selection_mode,
+        "split_random_seed": split_random_seed,
         "skip_singleton_bounds": skip_singleton_bounds,
         "enable_split_bit_branch_priority": enable_split_bit_branch_priority,
         "split_bit_branch_priority": split_bit_branch_priority,
