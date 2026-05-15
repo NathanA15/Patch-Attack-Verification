@@ -312,7 +312,11 @@ class Analyzer:
                             print("Time taken for is_greater:", time.time() - time_start) # Nathan - debug
                             continue
                         else:
-                            if(self.domain=='refinepoly'): # nathan - goes here full milp only with refinepoly 
+                            if(self.domain=='refinepoly'): # nathan - goes here full milp only with refinepoly
+                                print(64*"=")
+                                print("Adversarial label: ", adv_label)
+                                print(64*"=")
+
                                 obj = LinExpr()
                                 obj += 1 * var_list[counter + label]
                                 print("Counter is", counter, "candidate label is", label, "adv label is", adv_label) # Nathan - debug
@@ -383,10 +387,10 @@ class Analyzer:
                                         x = model.getAttr("x", var_list[:len(self.nn.specLB)])
 
                                         print("adv found against adv_label ", adv_label)
+                                        print("Time taken for finding adv:", time.time() - time_start)
 
                                         if terminate_on_failure:
                                             print("Terminated on failure") #Shuey Added
-                                            print("Time taken and terminate on failure:", time.time() - time_start)
                                             break
                                     else:
                                         if obj_bound is not None and obj_bound > 0: # proved robust for this label
@@ -397,6 +401,7 @@ class Analyzer:
                                             flag = False
                                             print("No concrete adversarial example found against adv_label ", adv_label)
                                             print("MILP ended without a witness; keeping this label unresolved")
+                                            print("Time taken for unresolved MILP:", time.time() - time_start)
 
                                 else:
                                     model.optimize(lp_callback)
