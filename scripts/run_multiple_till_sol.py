@@ -18,7 +18,7 @@ from config import MNIST_DATA_PATH
 from utils import resolve_runs_csv_path
 
 
-# Edit these globals to define what the script will run.
+# Edit these globals to define the default settings for scheduled runs.
 IMAGE_INDEX = 2
 PATCH_X = 0
 PATCH_Y = 0
@@ -40,6 +40,8 @@ CSV_PATH = None
 # Required: `upper_bound` and `timeout_milps`.
 # `timeout_milps[0]` is used for the initial attempt, `timeout_milps[1]` for
 # the first split depth, and so on. Deeper recursion reuses the last timeout.
+# Optional `image_index`, `patch_x`, `patch_y`, `patch_size`, and `max_depth`:
+# per-run overrides. Omit them to use the matching globals above.
 # Optional `adv_label`: int adversarial label to target. Omit it, or set it to
 # -1, to run the current full all-label pass.
 # Optional `top_k`: non-negative int number of patch pixels to split on.
@@ -53,39 +55,85 @@ CSV_PATH = None
 # split selection. If `FIXED_SPLIT_INDICES` is set, it overrides these split
 # choices and the CSV records the effective mode as "fixed".
 RUN_SCHEDULE = [
-    {"upper_bound": 0.75, "timeout_milps": [720000], "adv_label": 7},
-    {"upper_bound": 0.75, "timeout_milps": [10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "max"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "max"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "max"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "min"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "min"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "min"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "random"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "random"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "random"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 720000], "adv_label": 7, "top_k": 20, "split_selection_mode": "max"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 10, 720000], "adv_label": 7, "top_k": 20, "split_selection_mode": "max"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000], "adv_label": 7, "top_k": 20, "split_selection_mode": "max"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 720000], "adv_label": 7, "top_k": 10, "split_selection_mode": "max"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 10, 720000], "adv_label": 7, "top_k": 10, "split_selection_mode": "max"},
-    {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000], "adv_label": 7, "top_k": 10, "split_selection_mode": "max"},
+    # Previous comparison runs, kept here for reference.
+    # {"upper_bound": 0.75, "timeout_milps": [720000], "adv_label": 7},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "max"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "max"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "max"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "min"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "min"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "min"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "random"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "random"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000], "adv_label": 7, "top_k": 30, "split_selection_mode": "random"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 720000], "adv_label": 7, "top_k": 20, "split_selection_mode": "max"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 10, 720000], "adv_label": 7, "top_k": 20, "split_selection_mode": "max"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000], "adv_label": 7, "top_k": 20, "split_selection_mode": "max"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 720000], "adv_label": 7, "top_k": 10, "split_selection_mode": "max"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 10, 720000], "adv_label": 7, "top_k": 10, "split_selection_mode": "max"},
+    # {"upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000], "adv_label": 7, "top_k": 10, "split_selection_mode": "max"},
 
-    {"upper_bound": 0.7, "timeout_milps": [720000], "adv_label": 2},
-    {"upper_bound": 0.7, "timeout_milps": [10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "max"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "max"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 10, 10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "max"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "min"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "min"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 10, 10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "min"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "random"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "random"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 10, 10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "random"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 720000], "adv_label": 2, "top_k": 20, "split_selection_mode": "max"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 10, 720000], "adv_label": 2, "top_k": 20, "split_selection_mode": "max"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 10, 10, 720000], "adv_label": 2, "top_k": 20, "split_selection_mode": "max"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 720000], "adv_label": 2, "top_k": 10, "split_selection_mode": "max"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 10, 720000], "adv_label": 2, "top_k": 10, "split_selection_mode": "max"},
-    {"upper_bound": 0.7, "timeout_milps": [10, 10, 10, 720000], "adv_label": 2, "top_k": 10, "split_selection_mode": "max"},
+    # {"upper_bound": 0.7, "timeout_milps": [720000], "adv_label": 2},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "max"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "max"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 10, 10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "max"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "min"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "min"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 10, 10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "min"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "random"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "random"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 10, 10, 720000], "adv_label": 2, "top_k": 30, "split_selection_mode": "random"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 720000], "adv_label": 2, "top_k": 20, "split_selection_mode": "max"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 10, 720000], "adv_label": 2, "top_k": 20, "split_selection_mode": "max"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 10, 10, 720000], "adv_label": 2, "top_k": 20, "split_selection_mode": "max"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 720000], "adv_label": 2, "top_k": 10, "split_selection_mode": "max"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 10, 720000], "adv_label": 2, "top_k": 10, "split_selection_mode": "max"},
+    # {"upper_bound": 0.7, "timeout_milps": [10, 10, 10, 720000], "adv_label": 2, "top_k": 10, "split_selection_mode": "max"},
+
+    # Previous active random-mode runs, kept here for reference.
+    # {"image_index": 2, "patch_x": 0, "patch_y": 0, "patch_size": 10, "max_depth": 4, "upper_bound": 0.75, "timeout_milps": [10, 720000], "adv_label": 7, "top_k": 20, "split_selection_mode": "random"},
+    # {"image_index": 2, "patch_x": 0, "patch_y": 0, "patch_size": 10, "max_depth": 4, "upper_bound": 0.75, "timeout_milps": [10, 10, 720000], "adv_label": 7, "top_k": 20, "split_selection_mode": "random"},
+    # {"image_index": 2, "patch_x": 0, "patch_y": 0, "patch_size": 10, "max_depth": 4, "upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000], "adv_label": 7, "top_k": 20, "split_selection_mode": "random"},
+    # {"image_index": 2, "patch_x": 0, "patch_y": 0, "patch_size": 10, "max_depth": 4, "upper_bound": 0.75, "timeout_milps": [10, 720000], "adv_label": 7, "top_k": 10, "split_selection_mode": "random"},
+    # {"image_index": 2, "patch_x": 0, "patch_y": 0, "patch_size": 10, "max_depth": 4, "upper_bound": 0.75, "timeout_milps": [10, 10, 720000], "adv_label": 7, "top_k": 10, "split_selection_mode": "random"},
+    # {"image_index": 2, "patch_x": 0, "patch_y": 0, "patch_size": 10, "max_depth": 4, "upper_bound": 0.75, "timeout_milps": [10, 10, 10, 720000], "adv_label": 7, "top_k": 10, "split_selection_mode": "random"},
+
+    # {"image_index": 2, "patch_x": 0, "patch_y": 0, "patch_size": 10, "max_depth": 4, "upper_bound": 0.7, "timeout_milps": [10, 720000], "adv_label": 2, "top_k": 20, "split_selection_mode": "random"},
+    # {"image_index": 2, "patch_x": 0, "patch_y": 0, "patch_size": 10, "max_depth": 4, "upper_bound": 0.7, "timeout_milps": [10, 10, 720000], "adv_label": 2, "top_k": 20, "split_selection_mode": "random"},
+    # {"image_index": 2, "patch_x": 0, "patch_y": 0, "patch_size": 10, "max_depth": 4, "upper_bound": 0.7, "timeout_milps": [10, 10, 10, 720000], "adv_label": 2, "top_k": 20, "split_selection_mode": "random"},
+    # {"image_index": 2, "patch_x": 0, "patch_y": 0, "patch_size": 10, "max_depth": 4, "upper_bound": 0.7, "timeout_milps": [10, 720000], "adv_label": 2, "top_k": 10, "split_selection_mode": "random"},
+    # {"image_index": 2, "patch_x": 0, "patch_y": 0, "patch_size": 10, "max_depth": 4, "upper_bound": 0.7, "timeout_milps": [10, 10, 720000], "adv_label": 2, "top_k": 10, "split_selection_mode": "random"},
+    # {"image_index": 2, "patch_x": 0, "patch_y": 0, "patch_size": 10, "max_depth": 4, "upper_bound": 0.7, "timeout_milps": [10, 10, 10, 720000], "adv_label": 2, "top_k": 10, "split_selection_mode": "random"},
+
+    # Active image 7, patch 0,0 size 9 runs for adv_label=2 and upper_bound=0.8.
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [72000], "adv_label": 2},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 72000], "adv_label": 2, "top_k": 10, "split_selection_mode": "random"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 72000], "adv_label": 2, "top_k": 10, "split_selection_mode": "random"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 10, 72000], "adv_label": 2, "top_k": 10, "split_selection_mode": "random"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 72000], "adv_label": 2, "top_k": 20, "split_selection_mode": "random"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 72000], "adv_label": 2, "top_k": 20, "split_selection_mode": "random"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 10, 72000], "adv_label": 2, "top_k": 20, "split_selection_mode": "random"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 72000], "adv_label": 2, "top_k": 30, "split_selection_mode": "random"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 72000], "adv_label": 2, "top_k": 30, "split_selection_mode": "random"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 10, 72000], "adv_label": 2, "top_k": 30, "split_selection_mode": "random"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 72000], "adv_label": 2, "top_k": 10, "split_selection_mode": "max"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 72000], "adv_label": 2, "top_k": 10, "split_selection_mode": "max"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 10, 72000], "adv_label": 2, "top_k": 10, "split_selection_mode": "max"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 72000], "adv_label": 2, "top_k": 20, "split_selection_mode": "max"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 72000], "adv_label": 2, "top_k": 20, "split_selection_mode": "max"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 10, 72000], "adv_label": 2, "top_k": 20, "split_selection_mode": "max"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 72000], "adv_label": 2, "top_k": 30, "split_selection_mode": "max"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 72000], "adv_label": 2, "top_k": 30, "split_selection_mode": "max"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 10, 72000], "adv_label": 2, "top_k": 30, "split_selection_mode": "max"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 72000], "adv_label": 2, "top_k": 10, "split_selection_mode": "min"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 72000], "adv_label": 2, "top_k": 10, "split_selection_mode": "min"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 10, 72000], "adv_label": 2, "top_k": 10, "split_selection_mode": "min"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 72000], "adv_label": 2, "top_k": 20, "split_selection_mode": "min"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 72000], "adv_label": 2, "top_k": 20, "split_selection_mode": "min"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 10, 72000], "adv_label": 2, "top_k": 20, "split_selection_mode": "min"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 72000], "adv_label": 2, "top_k": 30, "split_selection_mode": "min"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 72000], "adv_label": 2, "top_k": 30, "split_selection_mode": "min"},
+    {"image_index": 7, "patch_x": 0, "patch_y": 0, "patch_size": 9, "max_depth": 4, "upper_bound": 0.8, "timeout_milps": [10, 10, 10, 72000], "adv_label": 2, "top_k": 30, "split_selection_mode": "min"},
 ]
 
 
@@ -100,6 +148,11 @@ def resolve_run_schedule(run_schedule):
 
         upper_bound = float(item["upper_bound"])
         timeout_milps = [float(value) for value in item["timeout_milps"]]
+        image_index = int(item.get("image_index", IMAGE_INDEX))
+        patch_x = int(item.get("patch_x", PATCH_X))
+        patch_y = int(item.get("patch_y", PATCH_Y))
+        patch_size = int(item.get("patch_size", PATCH_SIZE))
+        max_depth = int(item.get("max_depth", MAX_DEPTH))
         adv_label = int(item.get("adv_label", -1))
         top_k = int(item.get("top_k", TOP_K))
         split_selection_mode = run_verifier.normalize_split_selection_mode(
@@ -110,6 +163,26 @@ def resolve_run_schedule(run_schedule):
             raise ValueError(
                 f"RUN_SCHEDULE entry #{index} for upper_bound={upper_bound} has no timeout values."
             )
+        if image_index < 0:
+            raise ValueError(
+                f"RUN_SCHEDULE entry #{index} for upper_bound={upper_bound} has "
+                f"image_index={image_index}; image_index must be non-negative."
+            )
+        if patch_x < 0 or patch_y < 0:
+            raise ValueError(
+                f"RUN_SCHEDULE entry #{index} for upper_bound={upper_bound} has "
+                f"patch=({patch_x}, {patch_y}); patch coordinates must be non-negative."
+            )
+        if patch_size <= 0:
+            raise ValueError(
+                f"RUN_SCHEDULE entry #{index} for upper_bound={upper_bound} has "
+                f"patch_size={patch_size}; patch_size must be positive."
+            )
+        if max_depth < 0:
+            raise ValueError(
+                f"RUN_SCHEDULE entry #{index} for upper_bound={upper_bound} has "
+                f"max_depth={max_depth}; max_depth must be non-negative."
+            )
         if top_k < 0:
             raise ValueError(
                 f"RUN_SCHEDULE entry #{index} for upper_bound={upper_bound} has top_k={top_k}; "
@@ -118,6 +191,11 @@ def resolve_run_schedule(run_schedule):
 
         resolved_schedule.append(
             {
+                "image_index": image_index,
+                "patch_x": patch_x,
+                "patch_y": patch_y,
+                "patch_size": patch_size,
+                "max_depth": max_depth,
                 "upper_bound": upper_bound,
                 "timeout_milps": timeout_milps,
                 "adv_label": adv_label,
@@ -132,7 +210,18 @@ def resolve_run_schedule(run_schedule):
     return resolved_schedule
 
 
-def build_run_id(batch_run_id, upper_bound, timeout_milps, schedule_index, adv_label=-1):
+def build_run_id(
+    batch_run_id,
+    image_index,
+    patch_x,
+    patch_y,
+    patch_size,
+    max_depth,
+    upper_bound,
+    timeout_milps,
+    schedule_index,
+    adv_label=-1,
+):
     def normalize(value):
         return f"{value:g}".replace("-", "m").replace(".", "p")
 
@@ -141,6 +230,9 @@ def build_run_id(batch_run_id, upper_bound, timeout_milps, schedule_index, adv_l
     return (
         f"{batch_run_id}_"
         f"run_{schedule_index:02d}_"
+        f"img_{image_index}_"
+        f"patch_{patch_x}_{patch_y}_size_{patch_size}_"
+        f"max_depth_{max_depth}_"
         f"ub_{normalize(upper_bound)}_"
         f"{label_tag}"
         f"timeouts_{timeout_tag}"
@@ -161,9 +253,9 @@ def main():
     pixels = df.iloc[:, 1:].values
 
     print("Batch recursive verification settings")
-    print(f"image_index={IMAGE_INDEX} patch=({PATCH_X}, {PATCH_Y}) size={PATCH_SIZE}")
+    print(f"default image_index={IMAGE_INDEX} patch=({PATCH_X}, {PATCH_Y}) size={PATCH_SIZE}")
     print(
-        f"max_depth={MAX_DEPTH} top_k={TOP_K} "
+        f"default max_depth={MAX_DEPTH} top_k={TOP_K} "
         f"split_selection_mode={SPLIT_SELECTION_MODE} "
         f"split_random_seed={SPLIT_RANDOM_SEED}"
     )
@@ -181,6 +273,11 @@ def main():
     batch_results = []
 
     for schedule_index, schedule_item in enumerate(run_schedule, start=1):
+        image_index = schedule_item["image_index"]
+        patch_x = schedule_item["patch_x"]
+        patch_y = schedule_item["patch_y"]
+        patch_size = schedule_item["patch_size"]
+        max_depth = schedule_item["max_depth"]
         upper_bound = schedule_item["upper_bound"]
         timeout_milps = schedule_item["timeout_milps"]
         adv_label = schedule_item["adv_label"]
@@ -190,21 +287,23 @@ def main():
         print("\n" + "#" * 80)
         label_scope = "all labels" if adv_label == -1 else f"adv_label={adv_label}"
         print(
-            f"Starting upper_bound={upper_bound} {label_scope} "
+            f"Starting image_index={image_index} patch=({patch_x}, {patch_y}) "
+            f"size={patch_size} max_depth={max_depth} "
+            f"upper_bound={upper_bound} {label_scope} "
             f"with timeout schedule {timeout_milps} "
             f"top_k={top_k} split_selection_mode={split_selection_mode}"
         )
         print("#" * 80)
 
         result = run_verifier.verify_image_with_recursive_timeout_refinement(
-            img_index=IMAGE_INDEX,
+            img_index=image_index,
             pixels=pixels,
             labels=labels,
-            x_box=PATCH_X,
-            y_box=PATCH_Y,
-            size_box=PATCH_SIZE,
+            x_box=patch_x,
+            y_box=patch_y,
+            size_box=patch_size,
             timeout_milp=timeout_milps,
-            max_depth=MAX_DEPTH,
+            max_depth=max_depth,
             top_k=top_k,
             split_selection_mode=split_selection_mode,
             split_random_seed=SPLIT_RANDOM_SEED,
@@ -218,6 +317,11 @@ def main():
             adv_label=adv_label,
             run_id=build_run_id(
                 batch_run_id,
+                image_index,
+                patch_x,
+                patch_y,
+                patch_size,
+                max_depth,
                 upper_bound,
                 timeout_milps,
                 schedule_index,
@@ -229,6 +333,11 @@ def main():
 
         batch_results.append(
             {
+                "image_index": image_index,
+                "patch_x": patch_x,
+                "patch_y": patch_y,
+                "patch_size": patch_size,
+                "max_depth": max_depth,
                 "upper_bound": upper_bound,
                 "timeout_schedule": timeout_milps,
                 "adv_label": adv_label,
@@ -240,13 +349,17 @@ def main():
 
         if is_resolved(result):
             print(
-                f"Resolved upper_bound={upper_bound} adv_label={adv_label} "
+                f"Resolved image_index={image_index} patch=({patch_x}, {patch_y}) "
+                f"size={patch_size} max_depth={max_depth} "
+                f"upper_bound={upper_bound} adv_label={adv_label} "
                 f"with timeout_schedule={timeout_milps} "
                 f"top_k={top_k} split_selection_mode={split_selection_mode} "
                 f"status={result['status']} total_runtime={result['total_runtime_seconds']:.2f}s"
             )
         else:
             print(
+                f"image_index={image_index} patch=({patch_x}, {patch_y}) "
+                f"size={patch_size} max_depth={max_depth} "
                 f"upper_bound={upper_bound} adv_label={adv_label} "
                 f"stayed unresolved with timeout_schedule={timeout_milps} "
                 f"top_k={top_k} split_selection_mode={split_selection_mode}"
@@ -258,6 +371,9 @@ def main():
     for item in batch_results:
         result = item["result"]
         print(
+            f"image_index={item['image_index']} "
+            f"patch=({item['patch_x']}, {item['patch_y']}) "
+            f"size={item['patch_size']} max_depth={item['max_depth']} "
             f"upper_bound={item['upper_bound']} timeout_schedule={item['timeout_schedule']} "
             f"adv_label={item['adv_label']} "
             f"top_k={item['top_k']} split_selection_mode={item['split_selection_mode']} "
